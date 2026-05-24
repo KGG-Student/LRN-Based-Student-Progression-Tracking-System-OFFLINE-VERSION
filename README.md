@@ -142,14 +142,83 @@ The system computes selected-cohort indicators inside Cohort Tracking & Reports:
 
 ## Requirements
 
-Install:
+For the standalone desktop app, the client does not need to install Python, MySQL, Docker, or Git. They only need the generated application folder.
+
+For Docker development, install:
 
 - Docker
 - Docker Compose
 
 No local Python or MySQL installation is required when running through Docker.
 
-## Standalone Desktop Mode
+## How to Run the Program
+
+### Option 1: Standalone Desktop App
+
+Use this option for client/demo use.
+
+1. Open File Explorer.
+
+2. Go to the standalone build folder:
+
+```text
+C:\Users\KGG70\my-docker-stack\app\dist\LRN Tracking System
+```
+
+3. Double-click:
+
+```text
+LRN Tracking System.exe
+```
+
+4. Log in using the default account:
+
+```text
+Username: admin
+Password: admin123
+```
+
+5. Change the password after the first login.
+
+Important: when copying the program to another computer, copy the whole folder:
+
+```text
+LRN Tracking System
+```
+
+Do not copy only `LRN Tracking System.exe`. The `_internal` folder beside it is required for the app to run.
+
+### Option 2: Docker Web App
+
+Use this option for development or web-style testing.
+
+1. Open the project folder.
+
+```bash
+cd my-docker-stack
+```
+
+2. Build and start the containers.
+
+```bash
+docker compose up -d --build
+```
+
+3. Open the app.
+
+```text
+http://localhost
+```
+
+4. Log in:
+
+```text
+admin / admin123
+```
+
+5. Change the default password from **Account > Change Password**.
+
+## Standalone Desktop Build Notes
 
 The app can also run as a local standalone-style desktop application. This mode keeps the same Flask pages, templates, CSS, upload workflow, reports, and login system, but stores data in a local SQLite database instead of MySQL.
 
@@ -195,34 +264,6 @@ admin / admin123
 ```
 
 Change the password after the first login.
-
-## Getting Started
-
-1. Clone or open the project folder.
-
-```bash
-cd my-docker-stack
-```
-
-2. Build and start the containers.
-
-```bash
-docker compose up -d --build
-```
-
-3. Open the app.
-
-```text
-http://localhost
-```
-
-4. Log in using the default local account.
-
-```text
-admin / admin123
-```
-
-5. Change the default password from **Account > Change Password**.
 
 ## Main Pages
 
