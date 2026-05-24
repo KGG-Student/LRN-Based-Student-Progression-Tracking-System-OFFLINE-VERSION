@@ -37,6 +37,7 @@ It only processes uploaded LIS/SF1 files provided by authorized school personnel
 - Flask
 - Gunicorn
 - MySQL 8.0
+- SQLite for standalone desktop mode
 - Nginx
 - Pandas
 - OpenPyXL
@@ -124,8 +125,10 @@ The system computes selected-cohort indicators inside Cohort Tracking & Reports:
 +-- app/
 |   +-- app.py                  # Main Flask application
 |   +-- backend/                # Backend services, validators, formatters, and DB helpers
+|   +-- desktop_launcher.py     # Optional local desktop launcher
 |   +-- Dockerfile              # Flask/Gunicorn image
 |   +-- requirements.txt        # Python dependencies
+|   +-- desktop_requirements.txt # Optional desktop packaging dependencies
 |   +-- rsc/                    # Static resources such as school logo
 |   +-- templates/              # HTML templates, CSS, and JS assets
 +-- db/
@@ -145,6 +148,53 @@ Install:
 - Docker Compose
 
 No local Python or MySQL installation is required when running through Docker.
+
+## Standalone Desktop Mode
+
+The app can also run as a local standalone-style desktop application. This mode keeps the same Flask pages, templates, CSS, upload workflow, reports, and login system, but stores data in a local SQLite database instead of MySQL.
+
+Standalone mode is enabled with:
+
+```text
+APP_DB_ENGINE=sqlite
+```
+
+By default, the SQLite file is stored in:
+
+```text
+%LOCALAPPDATA%\LRNTrackingSystem\lrn_tracking.db
+```
+
+For development, install the optional desktop dependencies and run the launcher from the `app` directory:
+
+```bash
+pip install -r desktop_requirements.txt
+python desktop_launcher.py
+```
+
+The launcher starts the app on `127.0.0.1` and opens it in a desktop window when `pywebview` is available. If the desktop window cannot start, it falls back to the default browser.
+
+To create a Windows standalone build, run this from the `app` directory:
+
+```powershell
+.\build_standalone.ps1
+```
+
+The generated executable is placed in:
+
+```text
+app\dist\LRN Tracking System\LRN Tracking System.exe
+```
+
+Distribute the whole `LRN Tracking System` folder inside `dist`, not only the `.exe`, because the packaged runtime stores supporting files beside the executable.
+
+The default standalone account is also:
+
+```text
+admin / admin123
+```
+
+Change the password after the first login.
 
 ## Getting Started
 

@@ -5,6 +5,8 @@ from io import BytesIO
 import os
 import re
 import secrets
+import sys
+from pathlib import Path
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import check_password_hash, generate_password_hash
 from backend.constants import (
@@ -44,7 +46,13 @@ from backend.upload_service import (
 )
 from backend.validators import is_valid_school_year
 
-app = Flask(__name__)
+
+def resource_path(relative_path):
+    base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base_path / relative_path
+
+
+app = Flask(__name__, template_folder=str(resource_path("templates")))
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=20)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
@@ -910,12 +918,12 @@ def print_report():
 
 @app.route("/templates/<path:filename>")
 def template_assets(filename):
-    return send_from_directory("templates", filename)
+    return send_from_directory(resource_path("templates"), filename)
 
 
 @app.route("/rsc/<path:filename>")
 def resources(filename):
-    return send_from_directory("rsc", filename)
+    return send_from_directory(resource_path("rsc"), filename)
 
 
 @app.route("/student/search")

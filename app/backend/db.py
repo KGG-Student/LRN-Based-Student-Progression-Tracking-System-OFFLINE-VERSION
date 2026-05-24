@@ -1,4 +1,6 @@
 import os
+import sqlite3
+from pathlib import Path
 
 import mysql.connector
 from werkzeug.security import generate_password_hash
@@ -6,7 +8,102 @@ from werkzeug.security import generate_password_hash
 SCHEMA_READY = False
 
 
+def get_database_engine():
+    return os.environ.get("APP_DB_ENGINE", "mysql").strip().lower()
+
+
+def is_sqlite():
+    return get_database_engine() == "sqlite"
+
+
+class SQLiteCursor:
+    def __init__(self, cursor, dictionary=False):
+        self.cursor = cursor
+        self.dictionary = dictionary
+
+    def execute(self, query, params=None):
+        query = self._translate_query(query)
+        params = params or ()
+        self.cursor.execute(query, params)
+        return self
+
+    def fetchone(self):
+        row = self.cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row) if self.dictionary else tuple(row)
+
+    def fetchall(self):
+        rows = self.cursor.fetchall()
+        if self.dictionary:
+            return [dict(row) for row in rows]
+        return [tuple(row) for row in rows]
+
+    def close(self):
+        self.cursor.close()
+
+    def _translate_query(self, query):
+        normalized = " ".join(query.split()).upper()
+
+        if normalized.startswith("SET FOREIGN_KEY_CHECKS"):
+            return "SELECT 1"
+
+        if normalized.startswith("TRUNCATE TABLE "):
+            table = query.split()[-1]
+            return f"DELETE FROM {table}"
+
+        if normalized.startswith("DELETE L FROM STUDENT_CHANGE_LOGS"):
+            return """
+                DELETE FROM student_change_logs
+                WHERE lrn NOT IN (
+                    SELECT lrn FROM student_records
+                )
+            """
+
+        if normalized.startswith("DELETE S FROM STUDENTS"):
+            return """
+                DELETE FROM students
+                WHERE lrn NOT IN (
+                    SELECT lrn FROM student_records
+                )
+            """
+
+        return query.replace("%s", "?")
+
+
+class SQLiteConnection:
+    def __init__(self, path):
+        self.connection = sqlite3.connect(path)
+        self.connection.row_factory = sqlite3.Row
+        self.connection.execute("PRAGMA foreign_keys = ON")
+
+    def cursor(self, dictionary=False):
+        return SQLiteCursor(self.connection.cursor(), dictionary=dictionary)
+
+    def commit(self):
+        self.connection.commit()
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
+
+
+def get_sqlite_path():
+    configured_path = os.environ.get("SQLITE_DB_PATH")
+    if configured_path:
+        return Path(configured_path)
+
+    app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "LRNTrackingSystem"
+    app_data_dir.mkdir(parents=True, exist_ok=True)
+    return app_data_dir / "lrn_tracking.db"
+
+
 def get_db_connection():
+    if is_sqlite():
+        return SQLiteConnection(get_sqlite_path())
+
     config = {
         "host": os.environ.get("DB_HOST", "db"),
         "port": int(os.environ.get("DB_PORT", "3306")),
@@ -33,6 +130,14 @@ def ensure_schema():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    if is_sqlite():
+        ensure_sqlite_schema(cursor)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        SCHEMA_READY = True
+        return
 
     schema_updates = [
         "ALTER TABLE students ADD COLUMN gender VARCHAR(10)",
@@ -169,3 +274,124 @@ def ensure_schema():
     cursor.close()
     conn.close()
     SCHEMA_READY = True
+
+
+def ensure_sqlite_schema(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS students (
+            lrn TEXT PRIMARY KEY,
+            name TEXT,
+            gender TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS student_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lrn TEXT,
+            school_year TEXT,
+            grade_level INTEGER,
+            gender TEXT,
+            status TEXT,
+            remarks TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (lrn, school_year),
+            FOREIGN KEY (lrn) REFERENCES students(lrn)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_student_records_lrn
+        ON student_records (lrn)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS student_change_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lrn TEXT,
+            field_name TEXT,
+            old_value TEXT,
+            new_value TEXT,
+            school_year TEXT,
+            grade_level INTEGER,
+            changed_by TEXT,
+            changed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lrn) REFERENCES students(lrn)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'admin',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        DELETE FROM student_records
+        WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM student_records
+            GROUP BY lrn, school_year
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        UPDATE student_records
+        SET remarks = ''
+        WHERE LOWER(TRIM(COALESCE(remarks, ''))) = 'nan'
+        """
+    )
+
+    cursor.execute(
+        """
+        UPDATE student_records
+        SET status = CASE
+            WHEN UPPER(COALESCE(remarks, '')) LIKE '%PENDING TI%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%PENDING T/I%'
+                THEN 'PENDING_TRANSFER_IN'
+            WHEN UPPER(COALESCE(remarks, '')) LIKE '%T/O%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%T-O%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFER OUT%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFERRED OUT%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFER-OUT%'
+                THEN 'TRANSFER_OUT'
+            WHEN UPPER(COALESCE(remarks, '')) LIKE '%T/I%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%T-I%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFER IN%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFERRED IN%'
+                OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFER-IN%'
+                THEN 'TRANSFER_IN'
+            ELSE 'ENROLLED'
+        END
+        """
+    )
+
+    cursor.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0] or 0
+    if user_count == 0:
+        cursor.execute(
+            """
+            INSERT INTO users (username, password_hash, role)
+            VALUES (%s, %s, %s)
+            """,
+            ("admin", generate_password_hash("admin123"), "admin"),
+        )

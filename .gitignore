@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+
+app/build/
+app/dist/
+*.spec.tmp
+
+*.db
+*.sqlite
+*.sqlite3
