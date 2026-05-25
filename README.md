@@ -152,8 +152,6 @@ For Docker development, install:
 
 No local Python or MySQL installation is required when running through Docker.
 
-## How to Run the Program
-
 ## How to Install the App
 
 Use this section for testers and client users.
