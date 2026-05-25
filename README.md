@@ -154,6 +154,68 @@ No local Python or MySQL installation is required when running through Docker.
 
 ## How to Run the Program
 
+## How to Install the App
+
+Use this section for testers and client users.
+
+### Installer Version
+
+The recommended way to install the application is to use the Windows installer:
+
+```text
+app\installer\LRN-Tracking-System-Setup.exe
+```
+
+Installation steps:
+
+1. Double-click `LRN-Tracking-System-Setup.exe`.
+2. If Windows asks for permission, choose **Yes**.
+3. Follow the setup wizard.
+4. Choose whether to create a desktop shortcut.
+5. Click **Install**.
+6. After installation, open **LRN Tracking System** from the Start Menu or desktop shortcut.
+
+Default login:
+
+```text
+Username: admin
+Password: admin123
+```
+
+Change the password after the first login.
+
+### Portable Folder Version
+
+If the installer is not used, testers can run the portable standalone folder instead:
+
+```text
+app\dist\LRN Tracking System
+```
+
+Open:
+
+```text
+LRN Tracking System.exe
+```
+
+Important: copy or send the whole `LRN Tracking System` folder. Do not send only the `.exe`, because the `_internal` folder is required for the app to run.
+
+### Where App Data Is Saved
+
+The installed and portable versions save local data in:
+
+```text
+%LOCALAPPDATA%\LRNTrackingSystem
+```
+
+This location changes depending on the Windows user. For example, on another computer it may become:
+
+```text
+C:\Users\ClientName\AppData\Local\LRNTrackingSystem
+```
+
+The local database and password recovery key are stored there. Uninstalling the app does not automatically delete this data.
+
 ### Option 1: Standalone Desktop App
 
 Use this option for client/demo use.
