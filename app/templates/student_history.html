@@ -79,6 +79,8 @@
       color: #12376f;
     }
 
+    #confirmChangeLrnModal .modal-content,
+    #changeLrnModal .modal-content,
     #addYearRecordModal .modal-content,
     [id^="editRecord"] .modal-content {
       border: 1px solid rgba(18, 55, 111, 0.16);
@@ -87,12 +89,16 @@
       color: #12376f;
     }
 
+    #confirmChangeLrnModal .modal-header,
+    #changeLrnModal .modal-header,
     #addYearRecordModal .modal-header,
     [id^="editRecord"] .modal-header {
       background: #ffffff;
       border-bottom: 1px solid #d9e7fb;
     }
 
+    #confirmChangeLrnModal .modal-title,
+    #changeLrnModal .modal-title,
     #addYearRecordModal .modal-title,
     [id^="editRecord"] .modal-title {
       color: #12376f;
@@ -100,11 +106,15 @@
       font-weight: 800;
     }
 
+    #confirmChangeLrnModal .modal-body,
+    #changeLrnModal .modal-body,
     #addYearRecordModal .modal-body,
     [id^="editRecord"] .modal-body {
       color: #12376f;
     }
 
+    #confirmChangeLrnModal .form-control,
+    #changeLrnModal .form-control,
     #addYearRecordModal .form-control,
     #addYearRecordModal .form-select,
     [id^="editRecord"] .form-control,
@@ -113,17 +123,23 @@
       background-color: #ffffff;
     }
 
+    #confirmChangeLrnModal .form-control::placeholder,
+    #changeLrnModal .form-control::placeholder,
     #addYearRecordModal .form-control::placeholder,
     [id^="editRecord"] .form-control::placeholder {
       color: #7f91ad;
       opacity: 1;
     }
 
+    #confirmChangeLrnModal .modal-footer,
+    #changeLrnModal .modal-footer,
     #addYearRecordModal .modal-footer,
     [id^="editRecord"] .modal-footer {
       border-top: 1px solid #d9e7fb;
     }
 
+    #confirmChangeLrnModal .btn-close,
+    #changeLrnModal .btn-close,
     #addYearRecordModal .btn-close,
     [id^="editRecord"] .btn-close {
       opacity: 0.72;
@@ -176,7 +192,14 @@
           <h5>Student Profile</h5>
           <span>LRN-based student identity and latest saved information.</span>
         </div>
-        <a href="/students" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Back to Students</a>
+        <div class="d-flex flex-wrap gap-2">
+          {% if current_role == 'admin' %}
+          <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#changeLrnModal">
+            <i class="bi bi-pencil-square"></i> Change LRN
+          </button>
+          {% endif %}
+          <a href="/students" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Back to Students</a>
+        </div>
       </div>
 
       {% with messages = get_flashed_messages() %}
@@ -204,6 +227,73 @@
         </div>
       </div>
     </section>
+
+    {% if current_role == 'admin' %}<div class="modal fade" id="changeLrnModal" tabindex="-1" aria-labelledby="changeLrnModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form id="changeLrnForm" method="POST" action="/student/{{ student[0] }}/lrn/update">
+            <div class="modal-header">
+              <h5 class="modal-title" id="changeLrnModalLabel">Change Student LRN</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="alert alert-warning py-2">
+                <strong>Warning:</strong> This action changes the student's official identifier in this system. It will update all school-year records, progression history, and change logs linked to the current LRN.
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Current LRN</label>
+                <input class="form-control" type="text" value="{{ student[0] }}" disabled>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">New LRN</label>
+                <input class="form-control" type="text" name="new_lrn" pattern="[0-9]{12}" minlength="12" maxlength="12" placeholder="Enter 12-digit LRN" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Type CHANGE LRN to confirm</label>
+                <input class="form-control" type="text" name="confirmation" placeholder="CHANGE LRN" required>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-warning" id="openChangeLrnConfirm">Review Change</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if current_role == 'admin' %}<div class="modal fade" id="confirmChangeLrnModal" tabindex="-1" aria-labelledby="confirmChangeLrnModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="confirmChangeLrnModalLabel">Confirm LRN Update</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-danger py-2">
+              This cannot be partially applied. After confirming, every saved school year for this student will use the new LRN.
+            </div>
+            <div class="profile-grid">
+              <div class="profile-item">
+                <div class="label">Current LRN</div>
+                <div class="value">{{ student[0] }}</div>
+              </div>
+              <div class="profile-item">
+                <div class="label">New LRN</div>
+                <div class="value" id="confirmNewLrnValue">-</div>
+              </div>
+            </div>
+            <div class="tracking-definition-note mt-3">
+              The system will reject the update if the new LRN already belongs to another student.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Go Back</button>
+            <button type="button" class="btn btn-warning" id="confirmChangeLrnSubmit">Confirm and Update LRN</button>
+          </div>
+        </div>
+      </div>
+    </div>{% endif %}
 
     <section class="panel mb-4">
       <div class="history-toolbar">
@@ -417,6 +507,33 @@
       window.location.reload();
     }
   });
+
+  const changeLrnForm = document.getElementById("changeLrnForm");
+  const openChangeLrnConfirm = document.getElementById("openChangeLrnConfirm");
+  const confirmChangeLrnSubmit = document.getElementById("confirmChangeLrnSubmit");
+  const confirmNewLrnValue = document.getElementById("confirmNewLrnValue");
+  const changeLrnModalElement = document.getElementById("changeLrnModal");
+  const confirmChangeLrnModalElement = document.getElementById("confirmChangeLrnModal");
+
+  if (changeLrnForm && openChangeLrnConfirm && confirmChangeLrnModalElement) {
+    const confirmChangeLrnModal = new bootstrap.Modal(confirmChangeLrnModalElement);
+
+    openChangeLrnConfirm.addEventListener("click", function () {
+      if (!changeLrnForm.reportValidity()) {
+        return;
+      }
+
+      const newLrnInput = changeLrnForm.querySelector("[name='new_lrn']");
+      confirmNewLrnValue.textContent = newLrnInput.value || "-";
+      confirmChangeLrnModal.show();
+    });
+
+    confirmChangeLrnSubmit.addEventListener("click", function () {
+      bootstrap.Modal.getInstance(confirmChangeLrnModalElement)?.hide();
+      bootstrap.Modal.getInstance(changeLrnModalElement)?.hide();
+      changeLrnForm.submit();
+    });
+  }
 </script>
 </body>
 </html>

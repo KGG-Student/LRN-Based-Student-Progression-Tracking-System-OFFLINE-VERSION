@@ -18,7 +18,7 @@ from backend.constants import (
 )
 from backend.cohort_service import build_cohort_tracking, build_expected_path, build_grade7_cohort_report
 from backend.dashboard_service import get_dashboard_stats, get_grade_distribution, get_recent_changes
-from backend.db import ensure_schema, get_db_connection
+from backend.db import ensure_schema, get_db_connection, get_sqlite_path, is_sqlite
 from backend.formatters import (
     detect_status_from_remarks,
     format_remarks,
@@ -59,6 +59,29 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+
+def get_password_reset_key_path():
+    return get_sqlite_path().parent / "password_reset_key.txt"
+
+
+def get_password_reset_key():
+    configured_key = os.environ.get("PASSWORD_RESET_KEY", "").strip()
+    if configured_key:
+        return configured_key
+
+    if not is_sqlite():
+        return ""
+
+    key_path = get_password_reset_key_path()
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if key_path.exists():
+        return key_path.read_text(encoding="utf-8").strip()
+
+    recovery_key = secrets.token_urlsafe(18)
+    key_path.write_text(recovery_key, encoding="utf-8")
+    return recovery_key
 
 
 @app.route("/healthz")
@@ -284,9 +307,64 @@ def change_password():
     return render_template("change_password.html")
 
 
-@app.route("/forgot-password")
+@app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
-    return render_template("forgot_password.html")
+    ensure_schema()
+    reset_key_path = get_password_reset_key_path() if is_sqlite() else None
+    if reset_key_path:
+        get_password_reset_key()
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        reset_key = request.form.get("reset_key", "").strip()
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        expected_key = get_password_reset_key()
+
+        if not expected_key:
+            flash("Password recovery is not configured. Ask an admin to reset the password from User Management.")
+        elif not username:
+            flash("Username is required.")
+        elif len(new_password) < 8:
+            flash("New password must be at least 8 characters.")
+        elif new_password != confirm_password:
+            flash("New password and confirmation do not match.")
+        elif not secrets.compare_digest(reset_key, expected_key):
+            flash("Recovery key is incorrect.")
+        else:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                """
+                SELECT id
+                FROM users
+                WHERE username = %s
+                """,
+                (username,),
+            )
+            user = cursor.fetchone()
+
+            if not user:
+                flash("No account was found for that username.")
+            else:
+                cursor.execute(
+                    """
+                    UPDATE users
+                    SET password_hash = %s
+                    WHERE id = %s
+                    """,
+                    (generate_password_hash(new_password), user["id"]),
+                )
+                conn.commit()
+                cursor.close()
+                conn.close()
+                flash("Password reset successfully. You can now log in.")
+                return redirect(url_for("login"))
+
+            cursor.close()
+            conn.close()
+
+    return render_template("forgot_password.html", reset_key_path=reset_key_path)
 
 
 @app.route("/users", methods=["GET", "POST"])
@@ -1100,6 +1178,78 @@ def update_student_record(lrn):
     cursor.close()
     conn.close()
     return redirect(url_for("student_history", lrn=lrn))
+
+
+@app.route("/student/<lrn>/lrn/update", methods=["POST"])
+@admin_required
+def update_student_lrn(lrn):
+    ensure_schema()
+
+    if not LRN_PATTERN.match(lrn):
+        flash("Invalid current LRN. Use exactly 12 digits.")
+        return redirect(url_for("students"))
+
+    new_lrn = request.form.get("new_lrn", "").strip()
+    confirmation = request.form.get("confirmation", "").strip()
+
+    if not LRN_PATTERN.match(new_lrn):
+        flash("Enter a valid replacement LRN with exactly 12 digits.")
+        return redirect(url_for("student_history", lrn=lrn))
+
+    if new_lrn == lrn:
+        flash("No changes were made. The replacement LRN is the same as the current LRN.")
+        return redirect(url_for("student_history", lrn=lrn))
+
+    if confirmation != "CHANGE LRN":
+        flash("Type CHANGE LRN to confirm the LRN update.")
+        return redirect(url_for("student_history", lrn=lrn))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, gender FROM students WHERE lrn = %s", (lrn,))
+    student = cursor.fetchone()
+
+    if student is None:
+        cursor.close()
+        conn.close()
+        flash("No student found for that LRN.")
+        return redirect(url_for("students"))
+
+    cursor.execute("SELECT name FROM students WHERE lrn = %s", (new_lrn,))
+    existing_lrn = cursor.fetchone()
+
+    if existing_lrn:
+        cursor.close()
+        conn.close()
+        flash(f"LRN update rejected. {new_lrn} already belongs to {existing_lrn[0]}.")
+        return redirect(url_for("student_history", lrn=lrn))
+
+    name, gender = student
+    changed_by = session.get("username")
+
+    try:
+        cursor.execute(
+            """
+            INSERT INTO students (lrn, name, gender)
+            VALUES (%s, %s, %s)
+            """,
+            (new_lrn, name, gender),
+        )
+        cursor.execute("UPDATE student_records SET lrn = %s WHERE lrn = %s", (new_lrn, lrn))
+        cursor.execute("UPDATE student_change_logs SET lrn = %s WHERE lrn = %s", (new_lrn, lrn))
+        log_change(cursor, new_lrn, "student.lrn", lrn, new_lrn, changed_by=changed_by)
+        cursor.execute("DELETE FROM students WHERE lrn = %s", (lrn,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+    flash(f"Updated LRN from {lrn} to {new_lrn}. All progression records were moved to the new LRN.")
+    return redirect(url_for("student_history", lrn=new_lrn))
 
 
 @app.route("/student/<lrn>/delete", methods=["POST"])

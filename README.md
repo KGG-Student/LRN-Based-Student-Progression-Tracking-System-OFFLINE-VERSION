@@ -53,6 +53,7 @@ It only processes uploaded LIS/SF1 files provided by authorized school personnel
 - Logout confirmation page
 - Password hashing using Werkzeug
 - Change password page
+- Forgot password reset using a local recovery key in standalone mode
 - Admin password reset for other users
 - Admin and Viewer roles
 - User activation, deactivation, and deletion
@@ -180,6 +181,17 @@ Password: admin123
 
 5. Change the password after the first login.
 
+If the password is forgotten in standalone mode, open **Forgot password?** on the login page. The app will show the local recovery-key file path. Open that file, copy the recovery key, then use it to set a new password.
+
+If the admin account password is lost, use the same recovery flow:
+
+1. Click **Forgot password?** on the login page.
+2. Open the recovery-key file shown on the page.
+3. Copy the recovery key.
+4. Enter `admin` as the username.
+5. Enter the recovery key and a new password.
+6. Log in again using the new admin password.
+
 Important: when copying the program to another computer, copy the whole folder:
 
 ```text
@@ -265,11 +277,57 @@ admin / admin123
 
 Change the password after the first login.
 
+Standalone password recovery uses a local recovery key file stored beside the SQLite database:
+
+```text
+%LOCALAPPDATA%\LRNTrackingSystem\password_reset_key.txt
+```
+
+Keep this file private. Anyone with the recovery key can reset an account password from the **Forgot password?** page.
+
+If the admin password is lost, enter `admin` as the username on the **Forgot password?** page and use the recovery key to set a new admin password. The old password cannot be viewed because passwords are stored as hashes.
+
+## Windows Installer Build
+
+The standalone app can be packaged into a Windows installer after the PyInstaller build is created.
+
+Installer build requirement:
+
+- Inno Setup 6
+
+Recommended flow from the `app` directory:
+
+```powershell
+.\build_standalone.ps1
+.\build_installer.ps1
+```
+
+If Windows blocks PowerShell scripts, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_installer.ps1
+```
+
+The installer output will be created in:
+
+```text
+app\installer
+```
+
+The installer includes the whole standalone app folder and creates shortcuts for the client. User data is still stored outside the installation folder in:
+
+```text
+%LOCALAPPDATA%\LRNTrackingSystem
+```
+
+Uninstalling the app does not delete the local database or recovery key automatically, so client records are not accidentally removed.
+
 ## Main Pages
 
 | Page | URL | Purpose |
 | --- | --- | --- |
 | Login | `/login` | Sign in to the system |
+| Forgot Password | `/forgot-password` | Reset an account password using the local recovery key |
 | Dashboard | `/dashboard` | View totals, uploaded record distribution, latest activities, and quick actions |
 | LIS Upload | `/lis-upload` | Upload LIS/SF1 files and manage imported batches |
 | Students | `/students` | Browse, filter, and open student records |
@@ -383,6 +441,120 @@ docker compose up -d --build
 
 ## Testing Checklist
 
+Use this section when asking classmates, instructors, or client-side testers to check the application.
+
+### Tester Setup
+
+For normal testing, use the Windows installer:
+
+```text
+app\installer\LRN-Tracking-System-Setup.exe
+```
+
+Steps:
+
+1. Run `LRN-Tracking-System-Setup.exe`.
+2. Finish the installer.
+3. Open **LRN Tracking System** from the Start Menu or desktop shortcut.
+4. Log in using the default test account:
+
+```text
+Username: admin
+Password: admin123
+```
+
+5. If the app asks for permission or takes a few seconds to open, wait until the login screen appears.
+
+Do not use confidential real student records for general testing. Use sample LIS/SF1 files or dummy data unless the school has approved the test data.
+
+### Tester Notes
+
+- The app is for Junior High School records only: Grade 7 to Grade 10.
+- The LRN must be exactly 12 digits.
+- School year must use `YYYY-YYYY` format, for example `2025-2026`.
+- The app stores data locally on the computer in `%LOCALAPPDATA%\LRNTrackingSystem`.
+- Uninstalling the app does not automatically delete the local database.
+- If the admin password is forgotten, use **Forgot password?** and the local recovery key file.
+
+### Core Test Cases
+
+#### 1. Login and Logout
+
+Expected result:
+
+- Correct admin login opens the dashboard.
+- Wrong password shows an error.
+- Logout asks for confirmation before ending the session.
+
+#### 2. Forgot Password
+
+Expected result:
+
+- **Forgot password?** opens the recovery page.
+- The page shows the recovery-key file path.
+- Entering the correct recovery key allows the tester to set a new password.
+- The tester can log in using the new password.
+
+#### 3. User Management
+
+Expected result:
+
+- Admin can open **Users**.
+- Admin can add a new user.
+- Admin can reset another user's password.
+- Admin can deactivate or delete another user.
+- The system does not allow removing the last active admin.
+
+#### 4. LIS/SF1 Upload
+
+Expected result:
+
+- Valid `.xls`, `.xlsx`, or `.csv` LIS/SF1 files can be uploaded.
+- The system detects LRN, name, sex, and remarks columns.
+- Duplicate LRNs inside the same file are rejected.
+- Missing or invalid rows show a warning before import.
+- Imported students appear in **Student Records**.
+
+#### 5. Student Records
+
+Expected result:
+
+- Student records can be searched and filtered.
+- A student's history page opens from the student list.
+- Only one record per student per school year is allowed.
+- Duplicate manual entries with the same LRN and school year are rejected.
+
+#### 6. Student History and LRN Tracking
+
+Expected result:
+
+- Student history shows school-year movement from Grade 7 to Grade 10.
+- Name, sex, status, and remarks changes are logged.
+- Admin can edit status and remarks.
+- Admin can change a student's LRN only after confirming the warning.
+- Changing an LRN updates all school-year records for that student.
+
+#### 7. Cohort Tracking and Reports
+
+Expected result:
+
+- Cohort Tracking accepts valid starting school year and grade level.
+- The system identifies completed, irregular, repeater, transfer-out, incomplete, and for-review students.
+- Report tables show students who leave or disappear from the expected path.
+- Excel export downloads successfully.
+- Print report opens and can be saved as PDF.
+
+#### 8. Data Deletion and Re-Import
+
+Expected result:
+
+- Admin can delete a selected uploaded batch when needed.
+- Admin can delete all records for a fresh test batch.
+- After deletion, old student progression records should no longer appear in reports.
+- New uploads can be imported after deletion.
+
+### Quick Smoke Test
+
 Before demo or deployment, verify:
 
 - Login works with the admin account
@@ -403,6 +575,33 @@ Before demo or deployment, verify:
 - Cohort Tracking & Reports shows entry cohorts, review flags, print output, and Excel export
 - Excel export downloads successfully
 - Print report opens and can be saved as PDF
+
+### Issue Report Format
+
+When a tester finds a problem, record:
+
+```text
+Tester name:
+Date tested:
+App version or installer file used:
+Page or feature:
+Steps to reproduce:
+Expected result:
+Actual result:
+Screenshot or error message:
+Sample file used, if any:
+```
+
+Example:
+
+```text
+Page or feature: LIS Upload
+Steps to reproduce: Uploaded Grade 7 2025-2026 sample file with duplicate LRN.
+Expected result: System rejects duplicate LRN.
+Actual result: System imported the file.
+Screenshot or error message: Attached screenshot.
+Sample file used: Sample data.xls
+```
 
 - The active Flask application is `app/app.py`.
 - The main templates are `dashboard.html`, `records_page.html`, `student_history.html`, `co_tracking.html`, `login.html`, `change_password.html`, `logout_confirm.html`, and `print_report.html`.
