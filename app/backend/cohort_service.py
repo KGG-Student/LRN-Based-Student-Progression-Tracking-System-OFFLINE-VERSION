@@ -18,6 +18,16 @@ def build_expected_path(start_year, start_grade):
     return path
 
 
+def is_transfer_in_status(status):
+    return status in {"TRANSFER_IN", "PENDING_TRANSFER_IN"}
+
+
+def is_completer_record(record):
+    # LIS/SF1 imports do not provide a separate graduation field yet.
+    # A Grade 10 record is treated as a completer until a completer status is added.
+    return record["grade_level"] == 10 and record["status"] != "TRANSFER_OUT"
+
+
 def summarize_cohort_status(path_cells, records=None):
     records = records or []
     statuses = [cell["status"] for cell in path_cells if cell["status"] != "MISSING"]
@@ -176,6 +186,27 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
 def build_grade7_cohort_report(cursor, start_year, start_grade=7):
     expected_path = build_expected_path(start_year, start_grade)
     end_year = expected_path[-1]["school_year"]
+    transition_breakdown = [
+        {
+            "school_year": step["school_year"],
+            "grade": step["grade"],
+            "previous_school_year": expected_path[index]["school_year"],
+            "previous_grade": expected_path[index]["grade"],
+            "previous_enrollment": 0,
+            "retained": 0,
+            "current_students": 0,
+            "repeated": 0,
+            "retention_rate": 0,
+            "repetition_rate": 0,
+        }
+        for index, step in enumerate(expected_path[1:])
+    ]
+    transition_totals = {
+        "previous_enrollment": 0,
+        "retained": 0,
+        "current_students": 0,
+        "repeated": 0,
+    }
 
     cursor.execute(
         """
@@ -194,6 +225,9 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         "total": len(cohort_students),
         "on_time": 0,
         "completed": 0,
+        "grade10_enrollment": 0,
+        "grade10_completers": 0,
+        "survival": 0,
         "delayed": 0,
         "repeated": 0,
         "transfer_out": 0,
@@ -237,6 +271,9 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
             (record["school_year"], record["grade_level"]): record
             for record in records
         }
+        records_by_year = {}
+        for record in records:
+            records_by_year.setdefault(record["school_year"], []).append(record)
         grade_years = {}
         for record in records:
             grade_years.setdefault(record["grade_level"], set()).add(record["school_year"])
@@ -272,6 +309,8 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         has_transfer_out = any(record["status"] == "TRANSFER_OUT" for record in records)
         has_pending_transfer = any(record["status"] == "PENDING_TRANSFER_IN" for record in records)
         has_repetition = any(len(years) > 1 for years in grade_years.values())
+        expected_grade10_record = records_by_year_grade.get((end_year, 10))
+        has_grade10_completer = bool(expected_grade10_record and is_completer_record(expected_grade10_record))
         on_time = has_expected_grade10 and not missing_steps and not has_transfer_out
         delayed = has_grade10 and not on_time
 
@@ -298,6 +337,10 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
             summary["on_time"] += 1
         if has_grade10:
             summary["completed"] += 1
+        if expected_grade10_record and expected_grade10_record["status"] != "TRANSFER_OUT":
+            summary["grade10_enrollment"] += 1
+        if has_grade10_completer:
+            summary["grade10_completers"] += 1
         if delayed or has_repetition:
             summary["delayed"] += 1
         if has_repetition:
@@ -336,6 +379,34 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
                 }
             )
 
+        for index, current_step in enumerate(expected_path[1:]):
+            previous_step = expected_path[index]
+            transition = transition_breakdown[index]
+            previous_records = records_by_year.get(previous_step["school_year"], [])
+            current_records = records_by_year.get(current_step["school_year"], [])
+            previous_record = records_by_year_grade.get((previous_step["school_year"], previous_step["grade"]))
+            current_expected_record = records_by_year_grade.get((current_step["school_year"], current_step["grade"]))
+
+            if previous_record and previous_record["status"] != "TRANSFER_OUT":
+                transition["previous_enrollment"] += 1
+                transition_totals["previous_enrollment"] += 1
+
+                if current_expected_record and not is_transfer_in_status(current_expected_record["status"]):
+                    transition["retained"] += 1
+                    transition_totals["retained"] += 1
+
+            if current_records:
+                transition["current_students"] += 1
+                transition_totals["current_students"] += 1
+
+                if previous_records and any(
+                    current_record["grade_level"] == previous_record_item["grade_level"]
+                    for current_record in current_records
+                    for previous_record_item in previous_records
+                ):
+                    transition["repeated"] += 1
+                    transition_totals["repeated"] += 1
+
         rows.append(
             {
                 "lrn": lrn,
@@ -347,10 +418,38 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
             }
         )
 
+    current_transition = transition_breakdown[-1] if transition_breakdown else {
+        "previous_enrollment": 0,
+        "retained": 0,
+        "current_students": 0,
+        "repeated": 0,
+    }
+    summary["survival"] = summary["grade10_enrollment"]
+
     rates = {
         "on_time_completion": round((summary["on_time"] / summary["total"]) * 100, 2) if summary["total"] else 0,
         "overall_completion": round((summary["completed"] / summary["total"]) * 100, 2) if summary["total"] else 0,
+        "completion": round((summary["grade10_completers"] / summary["total"]) * 100, 2) if summary["total"] else 0,
+        "survival": round((summary["grade10_enrollment"] / summary["total"]) * 100, 2) if summary["total"] else 0,
+        "retention": round((current_transition["retained"] / current_transition["previous_enrollment"]) * 100, 2)
+        if current_transition["previous_enrollment"]
+        else 0,
+        "repetition": round((current_transition["repeated"] / current_transition["current_students"]) * 100, 2)
+        if current_transition["current_students"]
+        else 0,
     }
+
+    for transition in transition_breakdown:
+        transition["retention_rate"] = (
+            round((transition["retained"] / transition["previous_enrollment"]) * 100, 2)
+            if transition["previous_enrollment"]
+            else 0
+        )
+        transition["repetition_rate"] = (
+            round((transition["repeated"] / transition["current_students"]) * 100, 2)
+            if transition["current_students"]
+            else 0
+        )
 
     return {
         "start_year": start_year,
@@ -361,6 +460,8 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         "summary": summary,
         "rates": rates,
         "breakdown": list(breakdown.values()),
+        "transition_breakdown": transition_breakdown,
+        "transition_totals": transition_totals,
         "review_learners": review_learners,
         "rows": rows,
     }

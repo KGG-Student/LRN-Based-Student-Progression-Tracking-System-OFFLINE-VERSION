@@ -1,5 +1,5 @@
 from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 from io import BytesIO
 import os
@@ -82,6 +82,53 @@ def get_password_reset_key():
     recovery_key = secrets.token_urlsafe(18)
     key_path.write_text(recovery_key, encoding="utf-8")
     return recovery_key
+
+
+def get_available_file_path(directory, filename):
+    directory.mkdir(parents=True, exist_ok=True)
+    candidate = directory / filename
+    if not candidate.exists():
+        return candidate
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    for counter in range(2, 1000):
+        next_candidate = directory / f"{stem}-{counter}{suffix}"
+        if not next_candidate.exists():
+            return next_candidate
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return directory / f"{stem}-{timestamp}{suffix}"
+
+
+def get_standalone_export_dir():
+    downloads_dir = Path.home() / "Downloads"
+    if downloads_dir.exists():
+        return downloads_dir
+
+    return get_sqlite_path().parent / "exports"
+
+
+def save_standalone_workbook(workbook, filename):
+    export_dirs = []
+    downloads_dir = Path.home() / "Downloads"
+    if downloads_dir.exists():
+        export_dirs.append(downloads_dir)
+    export_dirs.append(get_sqlite_path().parent / "exports")
+
+    last_error = None
+    for export_dir in export_dirs:
+        export_path = get_available_file_path(export_dir, filename)
+        try:
+            workbook.save(export_path)
+            return export_path
+        except OSError as error:
+            last_error = error
+
+    if last_error:
+        raise last_error
+
+    raise OSError("No export directory is available.")
 
 
 @app.route("/healthz")
@@ -955,6 +1002,11 @@ def export_report():
 
     filename = f"grade-{start_grade}-entry-cohort-progression-report-{start_year}.xlsx"
 
+    if is_sqlite():
+        export_path = save_standalone_workbook(workbook, filename)
+        flash(f"Excel report saved to: {export_path}")
+        return redirect(url_for("cohort_tracking", start_year=start_year, start_grade=start_grade))
+
     return send_file(
         output,
         as_attachment=True,
@@ -1310,6 +1362,13 @@ def cohort_tracking():
         "dropped": 0,
         "incomplete": 0,
         "for_review": 0,
+        "rates": {
+            "completion": 0,
+            "survival": 0,
+            "retention": 0,
+            "repetition": 0,
+        },
+        "transition_breakdown": [],
     }
     expected_path = []
 
@@ -1328,6 +1387,9 @@ def cohort_tracking():
         conn = get_db_connection()
         cursor = conn.cursor()
         cohort_rows, summary = build_cohort_tracking(cursor, start_year, start_grade, expected_path)
+        report = build_grade7_cohort_report(cursor, start_year, start_grade)
+        summary["rates"] = report["rates"]
+        summary["transition_breakdown"] = report["transition_breakdown"]
         cursor.close()
         conn.close()
 

@@ -115,9 +115,15 @@ The cohort tracking and reports module includes:
 
 The system computes selected-cohort indicators inside Cohort Tracking & Reports:
 
-- **On-Time Completion Rate**: learners who reached Grade 10 on the expected year
-- **Overall Completion Rate**: learners who reached Grade 10, including those with irregular progression records
+- **Gross / Survival Rate**: Grade 10 enrollment in the current school year divided by Grade 7 enrollment from SY N-3, multiplied by 100
+- **Completion Rate**: Grade 10 completers in the current school year divided by Grade 7 enrollment from SY N-3, multiplied by 100
+- **Retention Rate**: same learners enrolled in the current school year divided by previous school year enrollment, multiplied by 100; new learners and transferees are excluded from the retained count
+- **Repetition Rate**: repeaters in the current school year divided by total enrollment in the current school year, multiplied by 100
+- **On-Time Completion Rate**: same basis as Completion Rate, kept in reports for clearer comparison with earlier report versions
+- **Overall Completion Rate**: learners who reached Grade 10, including irregular Grade 10 completion records
 - **For Review / Irregular Count**: learners with transfer, repeater, completed-irregular, missing, or incomplete records
+
+Note: the current data model does not have a separate Grade 10 completer/graduation field. A valid Grade 10 record is treated as a Grade 10 completer for reporting purposes. If the school needs to distinguish "Grade 10 enrolled" from "Grade 10 graduated," add a graduation/completer status field before final deployment.
 
 ## Project Structure
 
@@ -601,8 +607,8 @@ Expected result:
 - Cohort Tracking accepts valid starting school year and grade level.
 - The system identifies completed, irregular, repeater, transfer-out, incomplete, and for-review students.
 - Report tables show students who leave or disappear from the expected path.
-- Excel export downloads successfully.
-- Print report opens and can be saved as PDF.
+- Excel export saves successfully. In the standalone app, reports are saved to the user's Downloads folder when possible, or to `%LOCALAPPDATA%\LRNTrackingSystem\exports` as a fallback.
+- Print report opens inside the app and can be saved as PDF from the print dialog.
 
 #### 8. Data Deletion and Re-Import
 

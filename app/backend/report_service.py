@@ -48,9 +48,11 @@ def build_grade7_cohort_report_workbook(report):
         ("Summary", "Value", "", "Indicator", "Value", "", "Meaning"),
         (f"Original Grade {report['start_grade']} Entry Cohort", report["summary"]["total"], "", "On-Time Completion Rate", f"{report['rates']['on_time_completion']}%", "", "Completed Grade 10 on the expected year"),
         ("On-Time Completed", report["summary"]["on_time"], "", "Overall Completion Rate", f"{report['rates']['overall_completion']}%", "", "Completed Grade 10 even with irregular records"),
-        ("Completed Grade 10", report["summary"]["completed"], "", "Irregular / Repeater", report["summary"]["delayed"], "", "Learners with repetition or irregular completion"),
-        ("Transfer-Out", report["summary"]["transfer_out"], "", "For Review", report["summary"]["for_review"], "", "Records needing verification"),
-        ("Incomplete", report["summary"]["incomplete"], "", "", "", "", ""),
+        ("Grade 10 Enrollment", report["summary"]["grade10_enrollment"], "", "Gross / Survival Rate", f"{report['rates']['survival']}%", "", "Grade 10 enrollment current SY / Grade 7 enrollment SY N-3"),
+        ("Grade 10 Completers", report["summary"]["grade10_completers"], "", "Completion Rate", f"{report['rates']['completion']}%", "", "Grade 10 completers current SY / Grade 7 enrollment SY N-3"),
+        ("Transfer-Out", report["summary"]["transfer_out"], "", "Retention Rate", f"{report['rates']['retention']}%", "", "Same learners retained from one school year to the next"),
+        ("Incomplete", report["summary"]["incomplete"], "", "Repetition Rate", f"{report['rates']['repetition']}%", "", "Current-year learners repeating the previous year's grade"),
+        ("For Review", report["summary"]["for_review"], "", "", "", "", ""),
     ]
     for offset, row in enumerate(summary_rows, start=5):
         for column, value in enumerate(row, start=1):
@@ -105,6 +107,37 @@ def build_grade7_cohort_report_workbook(report):
         review_sheet.cell(row=6, column=1, value="No learners need review for this cohort.")
 
     style_report_sheet(review_sheet)
+
+    indicators_sheet = workbook.create_sheet("Rate Indicators")
+    indicators_sheet.merge_cells("A1:H1")
+    indicators_sheet["A1"] = "Retention and Repetition Breakdown"
+    indicator_headers = [
+        "School Year",
+        "Grade",
+        "Previous Enrollment",
+        "Retained",
+        "Retention Rate",
+        "Current Students",
+        "Repeated",
+        "Repetition Rate",
+    ]
+    for column, header in enumerate(indicator_headers, start=1):
+        indicators_sheet.cell(row=5, column=column, value=header)
+
+    for row_index, item in enumerate(report["transition_breakdown"], start=6):
+        indicators_sheet.cell(row=row_index, column=1, value=item["school_year"])
+        indicators_sheet.cell(row=row_index, column=2, value=f"Grade {item['grade']}")
+        indicators_sheet.cell(row=row_index, column=3, value=item["previous_enrollment"])
+        indicators_sheet.cell(row=row_index, column=4, value=item["retained"])
+        indicators_sheet.cell(row=row_index, column=5, value=f"{item['retention_rate']}%")
+        indicators_sheet.cell(row=row_index, column=6, value=item["current_students"])
+        indicators_sheet.cell(row=row_index, column=7, value=item["repeated"])
+        indicators_sheet.cell(row=row_index, column=8, value=f"{item['repetition_rate']}%")
+
+    if not report["transition_breakdown"]:
+        indicators_sheet.cell(row=6, column=1, value="No transition years are available for this cohort.")
+
+    style_report_sheet(indicators_sheet)
 
     breakdown_sheet = workbook.create_sheet("Review Breakdown")
     breakdown_sheet.merge_cells("A1:E1")

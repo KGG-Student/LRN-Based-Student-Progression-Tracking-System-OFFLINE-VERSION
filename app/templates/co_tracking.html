@@ -42,7 +42,7 @@
           <div class="tracking-actions">
             {% if start_year and expected_path %}
             <a class="btn btn-outline-primary" href="/reports/export?start_year={{ start_year }}&start_grade={{ start_grade }}">Export Excel</a>
-            <a class="btn btn-outline-primary" href="/reports/print?start_year={{ start_year }}&start_grade={{ start_grade }}" target="_blank">Print / Save PDF</a>
+            <a class="btn btn-outline-primary" href="/reports/print?start_year={{ start_year }}&start_grade={{ start_grade }}">Print / Save PDF</a>
             {% endif %}
             <button class="btn custom-btn" type="submit">Generate Tracking</button>
           </div>
@@ -50,7 +50,8 @@
         <div class="row g-3 mt-2">
           <div class="col-md-4">
             <label class="form-label">Starting School Year</label>
-            <input class="form-control" type="text" name="start_year" value="{{ start_year }}" placeholder="2022-2023" pattern="[0-9]{4}-[0-9]{4}" title="Use consecutive years in YYYY-YYYY format, for example 2022-2023" required>
+            <input class="form-control" type="text" name="start_year" value="{{ start_year }}" placeholder="e.g. 2022-2023" pattern="[0-9]{4}-[0-9]{4}" title="Use consecutive years in YYYY-YYYY format, for example 2022-2023" required>
+            <div class="form-text">Format: e.g. 2022-2023</div>
           </div>
           <div class="col-md-4">
             <label class="form-label">Grade Entry Level</label>
@@ -73,6 +74,13 @@
       <div class="dashboard-card"><div><p>Regular Students</p><h2>{{ summary.straight_path }}</h2></div></div>
       <div class="dashboard-card"><div><p>Completed Grade 10</p><h2>{{ summary.completed }}</h2></div></div>
       <div class="dashboard-card"><div><p>For Review / Irregular</p><h2>{{ summary.for_review }}</h2></div></div>
+    </section>
+
+    <section class="cards-section">
+      <div class="dashboard-card"><div><p>Completion Rate</p><h2>{{ summary.rates.completion }}%</h2></div></div>
+      <div class="dashboard-card"><div><p>Gross / Survival Rate</p><h2>{{ summary.rates.survival }}%</h2></div></div>
+      <div class="dashboard-card"><div><p>Retention Rate</p><h2>{{ summary.rates.retention }}%</h2></div></div>
+      <div class="dashboard-card"><div><p>Repetition Rate</p><h2>{{ summary.rates.repetition }}%</h2></div></div>
     </section>
 
     <section class="panel mb-4">
@@ -123,6 +131,37 @@
       </div>
     </section>
 
+    {% if summary.transition_breakdown %}
+    <section class="panel mb-4">
+      <div class="panel-header table-title">
+        <div><h5>Retention and Repetition Breakdown</h5><span class="text-muted">Shows year-to-year retention and repeated-grade movement for the selected entry cohort.</span></div>
+      </div>
+      <div class="table-responsive">
+        <table class="table custom-table align-middle">
+          <thead>
+            <tr>
+              <th>School Year</th><th>Grade</th><th>Previous Enrollment</th><th>Retained</th><th>Retention Rate</th><th>Current Enrollment</th><th>Repeaters</th><th>Repetition Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in summary.transition_breakdown %}
+            <tr>
+              <td>{{ item.school_year }}</td>
+              <td>Grade {{ item.grade }}</td>
+              <td>{{ item.previous_enrollment }}</td>
+              <td>{{ item.retained }}</td>
+              <td>{{ item.retention_rate }}%</td>
+              <td>{{ item.current_students }}</td>
+              <td>{{ item.repeated }}</td>
+              <td>{{ item.repetition_rate }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
     <section class="panel">
       <div class="panel-header table-title">
         <div><h5>Student Cohort List</h5><span class="text-muted">Shows student movement from the selected start grade through Grade 10.</span></div>
@@ -144,7 +183,7 @@
               {% for cell in row.path %}
               <td>
                 <span class="badge {{ status_badge_class(cell.status) }}">{{ cell.status_label }}</span>
-                {% if cell.remarks %}<div class="text-muted small">{{ cell.remarks }}</div>{% endif %}
+                {% if cell.remarks %}<div class="text-muted small">Remarks: {{ cell.remarks }}</div>{% endif %}
               </td>
               {% endfor %}
               <td><span class="badge {{ status_badge_class(row.result) }}">{{ row.result_label }}</span></td>
