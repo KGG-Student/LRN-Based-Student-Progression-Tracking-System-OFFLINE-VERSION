@@ -51,14 +51,14 @@
         {% endif %}
       {% endwith %}
 
-      <form class="row g-3 mt-2" method="get" action="/students">
+      <form class="row g-3 mt-2" id="studentFilterForm" method="get" action="/students">
         <div class="col-md-4">
           <label class="form-label">Search Student</label>
           <input type="text" class="form-control" name="q" value="{{ filters.q }}" placeholder="Search by LRN or name">
         </div>
         <div class="col-md-2">
           <label class="form-label">Grade Level</label>
-          <select class="form-select" name="grade">
+          <select class="form-select" name="grade" data-auto-filter>
             <option value="">All Grades</option>
             {% for grade in grades %}
             <option value="{{ grade }}" {% if filters.grade == grade|string %}selected{% endif %}>Grade {{ grade }}</option>
@@ -67,7 +67,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">Status</label>
-          <select class="form-select" name="status">
+          <select class="form-select" name="status" data-auto-filter>
             <option value="">All Status</option>
             {% for status in statuses %}
             <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>
@@ -222,6 +222,13 @@
   const addStudentForm = document.getElementById("addStudentForm");
   const confirmAddStudentButton = document.getElementById("confirmAddStudentButton");
   const confirmAddStudentModal = new bootstrap.Modal(document.getElementById("confirmAddStudentModal"));
+  const studentFilterForm = document.getElementById("studentFilterForm");
+
+  document.querySelectorAll("[data-auto-filter]").forEach(function (filterSelect) {
+    filterSelect.addEventListener("change", function () {
+      studentFilterForm.requestSubmit();
+    });
+  });
 
   addStudentForm.addEventListener("submit", function (event) {
     if (addStudentForm.dataset.confirmed === "true") {
