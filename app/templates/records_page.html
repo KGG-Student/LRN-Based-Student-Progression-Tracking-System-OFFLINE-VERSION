@@ -78,8 +78,9 @@
           <label class="form-label">School Year</label>
           <input class="form-control" type="text" name="year" value="{{ filters.year }}" placeholder="e.g. 2025-2026" pattern="[0-9]{4}-[0-9]{4}" title="Use consecutive years in YYYY-YYYY format, for example 2025-2026">
         </div>
-        <div class="col-md-2 d-flex align-items-end gap-2">
+        <div class="col-md-2 d-flex align-items-end gap-2 records-filter-actions">
           <button class="btn custom-btn w-100" type="submit">Filter</button>
+          <a class="btn btn-outline-secondary w-100" href="/students">Reset</a>
         </div>
       </form>
     </section>

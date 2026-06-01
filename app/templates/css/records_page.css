@@ -127,6 +127,12 @@
   border-color: #d9e7fb;
 }
 
+@media(max-width: 1100px) {
+  .records-filter-actions {
+    flex-direction: column;
+  }
+}
+
 @media(max-width: 768px) {
   .records-header {
     flex-direction: column;
