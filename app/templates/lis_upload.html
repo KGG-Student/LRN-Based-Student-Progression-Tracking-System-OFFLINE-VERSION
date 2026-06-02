@@ -114,7 +114,7 @@
         <span class="text-muted">Remove one school year and grade-level batch if the wrong LIS file was imported.</span>
       </div>
 
-      <form action="/records/delete-batch" method="post" class="row g-3">
+      <form id="deleteBatchForm" action="/records/delete-batch" method="post" class="row g-3">
         <div class="col-md-3">
           <label class="form-label">School Year</label>
           <input class="form-control" type="text" name="school_year" placeholder="e.g. 2025-2026" pattern="[0-9]{4}-[0-9]{4}" title="Use consecutive years in YYYY-YYYY format, for example 2025-2026" required>
@@ -129,13 +129,8 @@
           </select>
         </div>
 
-        <div class="col-md-3">
-          <label class="form-label">Confirmation</label>
-          <input class="form-control" type="text" name="confirmation" placeholder="Type DELETE" required>
-        </div>
-
-        <div class="col-md-3 d-flex align-items-end">
-          <button type="submit" class="btn btn-outline-danger w-100">Erase Batch</button>
+        <div class="col-md-6 d-flex align-items-end">
+          <button type="button" class="btn btn-outline-danger w-100" id="openDeleteBatchConfirm">Erase Batch</button>
         </div>
       </form>
     </section>
@@ -146,18 +141,55 @@
         <span class="text-muted">Reset all uploaded student records, histories, and change logs while keeping the system ready for new uploads.</span>
       </div>
 
-      <form action="/records/delete-all" method="post" class="row g-3">
+      <form id="deleteAllForm" action="/records/delete-all" method="post" class="row g-3">
         <div class="col-md-9">
-          <label class="form-label">Confirmation</label>
-          <input class="form-control" type="text" name="confirmation" placeholder="Type DELETE ALL" required>
+          <div class="tracking-definition-note">
+            This removes every student, progression record, and change log from the system.
+          </div>
         </div>
 
         <div class="col-md-3 d-flex align-items-end">
-          <button type="submit" class="btn btn-outline-danger w-100">Erase All Records</button>
+          <button type="button" class="btn btn-outline-danger w-100" id="openDeleteAllConfirm">Erase All Records</button>
         </div>
       </form>
     </section>
   </main>
+</div>
+
+<div class="modal fade" id="deleteBatchConfirmModal" tabindex="-1" aria-labelledby="deleteBatchConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content confirm-delete-modal">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteBatchConfirmModalLabel">Are you sure?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">Yes will erase the selected grade-level batch for the selected school year.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">No</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBatchSubmit">Yes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="deleteAllConfirmModal" tabindex="-1" aria-labelledby="deleteAllConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content confirm-delete-modal">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteAllConfirmModalLabel">Are you sure?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">Yes will permanently erase all students, progression records, and change logs.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">No</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteAllSubmit">Yes</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% set has_upload_error = namespace(value=false) %}
 {% for category, message in flashed_messages %}
@@ -230,6 +262,46 @@
   </div>
 {% endif %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const deleteBatchForm = document.getElementById("deleteBatchForm");
+  const openDeleteBatchConfirm = document.getElementById("openDeleteBatchConfirm");
+  const confirmDeleteBatchSubmit = document.getElementById("confirmDeleteBatchSubmit");
+  const deleteBatchConfirmModalElement = document.getElementById("deleteBatchConfirmModal");
+  const deleteAllForm = document.getElementById("deleteAllForm");
+  const openDeleteAllConfirm = document.getElementById("openDeleteAllConfirm");
+  const confirmDeleteAllSubmit = document.getElementById("confirmDeleteAllSubmit");
+  const deleteAllConfirmModalElement = document.getElementById("deleteAllConfirmModal");
+
+  if (deleteBatchForm && openDeleteBatchConfirm && deleteBatchConfirmModalElement) {
+    const deleteBatchConfirmModal = new bootstrap.Modal(deleteBatchConfirmModalElement);
+
+    openDeleteBatchConfirm.addEventListener("click", function () {
+      if (!deleteBatchForm.reportValidity()) {
+        return;
+      }
+
+      deleteBatchConfirmModal.show();
+    });
+
+    confirmDeleteBatchSubmit.addEventListener("click", function () {
+      bootstrap.Modal.getInstance(deleteBatchConfirmModalElement)?.hide();
+      deleteBatchForm.submit();
+    });
+  }
+
+  if (deleteAllForm && openDeleteAllConfirm && deleteAllConfirmModalElement) {
+    const deleteAllConfirmModal = new bootstrap.Modal(deleteAllConfirmModalElement);
+
+    openDeleteAllConfirm.addEventListener("click", function () {
+      deleteAllConfirmModal.show();
+    });
+
+    confirmDeleteAllSubmit.addEventListener("click", function () {
+      bootstrap.Modal.getInstance(deleteAllConfirmModalElement)?.hide();
+      deleteAllForm.submit();
+    });
+  }
+</script>
 {% if has_upload_error.value %}
   <script>
     document.addEventListener('DOMContentLoaded', function () {

@@ -58,27 +58,31 @@
 }
 
 #uploadErrorModal .modal-content,
-#uploadWarningModal .modal-content {
+#uploadWarningModal .modal-content,
+.confirm-delete-modal {
   border: 1px solid rgba(18, 55, 111, 0.16);
   border-radius: 12px;
   box-shadow: 0 18px 42px rgba(3, 18, 42, 0.24);
 }
 
 #uploadErrorModal .modal-header,
-#uploadWarningModal .modal-header {
+#uploadWarningModal .modal-header,
+.confirm-delete-modal .modal-header {
   background: #ffffff;
   border-bottom: 1px solid #d9e7fb;
 }
 
 #uploadErrorModal .modal-title,
-#uploadWarningModal .modal-title {
+#uploadWarningModal .modal-title,
+.confirm-delete-modal .modal-title {
   color: #12376f;
   font-size: 18px;
   font-weight: 800;
 }
 
 #uploadErrorModal .modal-body p,
-#uploadWarningModal .modal-body p {
+#uploadWarningModal .modal-body p,
+.confirm-delete-modal .modal-body p {
   color: #12376f;
   font-size: 13px;
   line-height: 1.6;
@@ -89,7 +93,8 @@
 }
 
 #uploadErrorModal .modal-footer,
-#uploadWarningModal .modal-footer {
+#uploadWarningModal .modal-footer,
+.confirm-delete-modal .modal-footer {
   border-top: 1px solid #d9e7fb;
 }
 

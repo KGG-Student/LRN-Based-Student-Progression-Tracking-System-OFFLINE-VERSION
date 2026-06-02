@@ -263,7 +263,7 @@ def upsert_student(cursor, lrn, name, gender, school_year, grade_level, changed_
 def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status, remarks, changed_by=None):
     cursor.execute(
         """
-        SELECT id, gender, status, remarks
+        SELECT id, grade_level, gender, status, remarks
         FROM student_records
         WHERE lrn = %s
         AND school_year = %s
@@ -284,13 +284,14 @@ def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status,
         )
         return "inserted", 0
 
-    record_id, old_gender, old_status, old_remarks = existing
+    record_id, old_grade, old_gender, old_status, old_remarks = existing
+    if int(old_grade) != int(grade_level):
+        raise ValueError(
+            f"Duplicate school year rejected. {lrn} already has a Grade {old_grade} record in {school_year}."
+        )
+
     changes_logged = 0
 
-    cursor.execute("SELECT grade_level FROM student_records WHERE id = %s", (record_id,))
-    old_grade = cursor.fetchone()[0]
-    if log_change(cursor, lrn, "record.grade_level", old_grade, grade_level, school_year, grade_level, changed_by):
-        changes_logged += 1
     if log_change(cursor, lrn, "record.gender", old_gender, gender, school_year, grade_level, changed_by):
         changes_logged += 1
     if log_change(cursor, lrn, "record.status", old_status, status, school_year, grade_level, changed_by):
@@ -301,9 +302,9 @@ def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status,
     cursor.execute(
         """
         UPDATE student_records
-        SET grade_level = %s, gender = %s, status = %s, remarks = %s
+        SET gender = %s, status = %s, remarks = %s
         WHERE id = %s
         """,
-        (grade_level, gender, status, remarks, record_id),
+        (gender, status, remarks, record_id),
     )
     return "updated", changes_logged

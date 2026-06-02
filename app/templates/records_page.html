@@ -180,10 +180,6 @@
               <label class="form-label">Remarks</label>
               <textarea class="form-control" name="remarks" rows="3"></textarea>
             </div>
-            <div class="col-12">
-              <label class="form-label">Type ADD STUDENT to confirm</label>
-              <input class="form-control" type="text" name="confirmation" placeholder="ADD STUDENT" required>
-            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -203,14 +199,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="mb-2">Add this new student record to the system?</p>
+        <p class="mb-2"><strong>Are you sure?</strong></p>
         <div class="confirm-detail">
-          This should only be used for a brand-new LRN. Existing learners should use Add Year Record from the student history page.
+          Yes will add this new student record to the system. This should only be used for a brand-new LRN.
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Review Details</button>
-        <button type="button" class="btn custom-btn" id="confirmAddStudentButton">Confirm Add</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">No</button>
+        <button type="button" class="btn custom-btn" id="confirmAddStudentButton">Yes</button>
       </div>
     </div>
   </div>

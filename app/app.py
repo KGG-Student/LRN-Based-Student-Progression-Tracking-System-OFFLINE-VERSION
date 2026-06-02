@@ -647,7 +647,6 @@ def delete_batch_records():
 
     school_year = request.form.get("school_year", "").strip()
     grade_level = request.form.get("grade_level", "").strip()
-    confirmation = request.form.get("confirmation", "").strip()
 
     if not is_valid_school_year(school_year):
         flash("Use school year format YYYY-YYYY with consecutive years before deleting a batch.")
@@ -655,10 +654,6 @@ def delete_batch_records():
 
     if not grade_level.isdigit() or int(grade_level) not in SUPPORTED_GRADES:
         flash("Select a valid Grade 7 to Grade 10 batch to delete.")
-        return redirect(url_for("lis_upload"))
-
-    if confirmation != "DELETE":
-        flash("Type DELETE to confirm batch deletion.")
         return redirect(url_for("lis_upload"))
 
     grade_level = int(grade_level)
@@ -730,12 +725,6 @@ def delete_batch_records():
 @admin_required
 def delete_all_records():
     ensure_schema()
-
-    confirmation = request.form.get("confirmation", "").strip()
-
-    if confirmation != "DELETE ALL":
-        flash("Type DELETE ALL to confirm overall deletion.")
-        return redirect(url_for("lis_upload"))
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -818,11 +807,6 @@ def add_student():
     grade_level = request.form.get("grade_level", "").strip()
     status = request.form.get("status", "").strip()
     remarks = normalize_remarks(request.form.get("remarks", ""))
-    confirmation = request.form.get("confirmation", "").strip()
-
-    if confirmation != "ADD STUDENT":
-        flash("Type ADD STUDENT to confirm manual student creation.")
-        return redirect(url_for("students"))
 
     if not LRN_PATTERN.match(lrn):
         flash("Enter a valid 12-digit LRN before adding a student.")
@@ -921,11 +905,6 @@ def add_student_year_record(lrn):
     grade_level = request.form.get("grade_level", "").strip()
     status = request.form.get("status", "").strip()
     remarks = normalize_remarks(request.form.get("remarks", ""))
-    confirmation = request.form.get("confirmation", "").strip()
-
-    if confirmation != "ADD RECORD":
-        flash("Type ADD RECORD to confirm adding a new school year record.")
-        return redirect(url_for("student_history", lrn=lrn))
 
     if gender not in {"MALE", "FEMALE"}:
         flash("Select a valid sex value.")
@@ -1272,7 +1251,6 @@ def update_student_lrn(lrn):
         return redirect(url_for("students"))
 
     new_lrn = request.form.get("new_lrn", "").strip()
-    confirmation = request.form.get("confirmation", "").strip()
 
     if not LRN_PATTERN.match(new_lrn):
         flash("Enter a valid replacement LRN with exactly 12 digits.")
@@ -1280,10 +1258,6 @@ def update_student_lrn(lrn):
 
     if new_lrn == lrn:
         flash("No changes were made. The replacement LRN is the same as the current LRN.")
-        return redirect(url_for("student_history", lrn=lrn))
-
-    if confirmation != "CHANGE LRN":
-        flash("Type CHANGE LRN to confirm the LRN update.")
         return redirect(url_for("student_history", lrn=lrn))
 
     conn = get_db_connection()
@@ -1342,11 +1316,6 @@ def delete_student(lrn):
     if not LRN_PATTERN.match(lrn):
         flash("Invalid LRN. Use exactly 12 digits.")
         return redirect(url_for("students"))
-
-    confirmation = request.form.get("confirmation", "").strip()
-    if confirmation != "DELETE STUDENT":
-        flash("Type DELETE STUDENT to confirm student deletion.")
-        return redirect(url_for("student_history", lrn=lrn))
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1593,6 +1562,38 @@ def upload():
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        grade_conflicts = []
+        for lrn in sorted(df["LRN"].astype(str).str.strip().unique().tolist()):
+            cursor.execute(
+                """
+                SELECT grade_level
+                FROM student_records
+                WHERE lrn = %s
+                AND school_year = %s
+                LIMIT 1
+                """,
+                (lrn, school_year),
+            )
+            existing_record = cursor.fetchone()
+            if existing_record and int(existing_record[0]) != int(grade_level):
+                grade_conflicts.append((lrn, existing_record[0]))
+
+        if grade_conflicts:
+            shown_conflicts = ", ".join(
+                f"{lrn} already Grade {existing_grade}" for lrn, existing_grade in grade_conflicts[:5]
+            )
+            extra_count = len(grade_conflicts) - 5
+            if extra_count > 0:
+                shown_conflicts = f"{shown_conflicts}, and {extra_count} more"
+            cursor.close()
+            conn.close()
+            flash(
+                f"Import rejected. These learners already have records in {school_year}: {shown_conflicts}. "
+                "A learner can only have one grade record per school year. Check the selected grade level or file.",
+                "upload_error",
+            )
+            return redirect(url_for("lis_upload"))
 
         records_inserted = 0
         records_updated = 0
