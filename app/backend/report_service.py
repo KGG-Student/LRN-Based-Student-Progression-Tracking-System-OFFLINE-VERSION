@@ -129,10 +129,18 @@ def build_grade7_cohort_report_workbook(report):
         indicators_sheet.cell(row=row_index, column=2, value=f"Grade {item['grade']}")
         indicators_sheet.cell(row=row_index, column=3, value=item["previous_enrollment"])
         indicators_sheet.cell(row=row_index, column=4, value=item["retained"])
-        indicators_sheet.cell(row=row_index, column=5, value=f"{item['retention_rate']}%")
+        indicators_sheet.cell(
+            row=row_index,
+            column=5,
+            value="N/A" if item.get("is_baseline") else f"{item['retention_rate']}%",
+        )
         indicators_sheet.cell(row=row_index, column=6, value=item["current_students"])
         indicators_sheet.cell(row=row_index, column=7, value=item["repeated"])
-        indicators_sheet.cell(row=row_index, column=8, value=f"{item['repetition_rate']}%")
+        indicators_sheet.cell(
+            row=row_index,
+            column=8,
+            value="N/A" if item.get("is_baseline") else f"{item['repetition_rate']}%",
+        )
 
     if not report["transition_breakdown"]:
         indicators_sheet.cell(row=6, column=1, value="No transition years are available for this cohort.")

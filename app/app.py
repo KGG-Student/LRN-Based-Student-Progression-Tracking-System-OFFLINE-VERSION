@@ -463,9 +463,37 @@ def manage_users():
 
             if role not in allowed_roles:
                 flash("Invalid user role.")
-            elif user_id == str(session.get("user_id")) and not is_active:
-                flash("You cannot deactivate your own account.")
             else:
+                cursor.execute(
+                    """
+                    SELECT id, username, role, is_active
+                    FROM users
+                    WHERE id = %s
+                    """,
+                    (user_id,),
+                )
+                target_user = cursor.fetchone()
+
+                if not target_user:
+                    flash("User account was not found.")
+                    cursor.close()
+                    conn.close()
+                    return redirect(url_for("manage_users"))
+
+                if target_user["username"] == "admin" and (
+                    role != target_user["role"] or is_active != bool(target_user["is_active"])
+                ):
+                    flash("The primary admin account role and status cannot be changed.")
+                    cursor.close()
+                    conn.close()
+                    return redirect(url_for("manage_users"))
+
+                if user_id == str(session.get("user_id")) and (role != target_user["role"] or not is_active):
+                    flash("You cannot change your own role or deactivate your own account.")
+                    cursor.close()
+                    conn.close()
+                    return redirect(url_for("manage_users"))
+
                 cursor.execute(
                     """
                     SELECT COUNT(*) AS active_admins
@@ -533,6 +561,8 @@ def manage_users():
 
                 if not target_user:
                     flash("User account was not found.")
+                elif target_user["username"] == "admin":
+                    flash("The primary admin account cannot be deleted.")
                 else:
                     cursor.execute(
                         """
@@ -570,7 +600,7 @@ def manage_users():
     cursor.close()
     conn.close()
 
-    return render_template("users.html", users=users)
+    return render_template("users.html", users=users, primary_admin_username="admin")
 
 
 @app.route("/dashboard")

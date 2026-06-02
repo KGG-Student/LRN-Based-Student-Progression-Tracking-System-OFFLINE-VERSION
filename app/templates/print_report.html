@@ -235,10 +235,10 @@
             <td>Grade {{ item.grade }}</td>
             <td>{{ item.previous_enrollment }}</td>
             <td>{{ item.retained }}</td>
-            <td>{{ item.retention_rate }}%</td>
+            <td>{% if item.is_baseline %}N/A{% else %}{{ item.retention_rate }}%{% endif %}</td>
             <td>{{ item.current_students }}</td>
             <td>{{ item.repeated }}</td>
-            <td>{{ item.repetition_rate }}%</td>
+            <td>{% if item.is_baseline %}N/A{% else %}{{ item.repetition_rate }}%{% endif %}</td>
           </tr>
           {% else %}
           <tr><td class="empty" colspan="8">No transition years are available for this cohort.</td></tr>

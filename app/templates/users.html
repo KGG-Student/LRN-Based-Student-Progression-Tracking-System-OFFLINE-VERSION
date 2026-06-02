@@ -128,15 +128,19 @@
               <tbody>
                 {% for user in users %}
                 <tr>
-                  <td><strong>{{ user.username }}</strong>{% if user.id == session.user_id %} <span class="badge bg-primary">You</span>{% endif %}</td>
+                  <td>
+                    <strong>{{ user.username }}</strong>
+                    {% if user.id == session.user_id %} <span class="badge bg-primary">You</span>{% endif %}
+                    {% if user.username == primary_admin_username %} <span class="badge bg-info text-dark">Primary Admin</span>{% endif %}
+                  </td>
                   <td>{{ user.role|title }}</td>
                   <td><span class="badge {{ 'bg-success' if user.is_active else 'bg-secondary' }}">{{ 'Active' if user.is_active else 'Inactive' }}</span></td>
                   <td>{{ (user.created_at|string)[:10] if user.created_at else '' }}</td>
                   <td>
                     <div class="d-flex gap-2 flex-wrap">
-                      <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editUser{{ user.id }}">Edit</button>
+                      <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editUser{{ user.id }}" {% if user.username == primary_admin_username %}disabled title="Primary admin role and status are protected"{% endif %}>Edit</button>
                       {% if user.id != session.user_id %}<button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="modal" data-bs-target="#resetPassword{{ user.id }}">Reset Password</button>{% endif %}
-                      {% if user.id != session.user_id %}<button class="btn btn-sm btn-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteUser{{ user.id }}">Delete</button>{% endif %}
+                      {% if user.id != session.user_id and user.username != primary_admin_username %}<button class="btn btn-sm btn-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteUser{{ user.id }}">Delete</button>{% endif %}
                     </div>
                   </td>
                 </tr>
@@ -248,7 +252,7 @@
   </div>
 </div>{% endif %}
 
-<div class="modal fade" id="deleteUser{{ user.id }}" tabindex="-1" aria-hidden="true">
+{% if user.id != session.user_id and user.username != primary_admin_username %}<div class="modal fade" id="deleteUser{{ user.id }}" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <form class="modal-content" method="POST" action="/users">
       <input type="hidden" name="action" value="delete">
@@ -269,7 +273,7 @@
       </div>
     </form>
   </div>
-</div>
+</div>{% endif %}
 {% endfor %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

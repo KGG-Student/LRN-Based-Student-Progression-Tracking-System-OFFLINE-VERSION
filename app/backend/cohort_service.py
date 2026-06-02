@@ -451,6 +451,23 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
             else 0
         )
 
+    baseline_step = expected_path[0]
+    transition_breakdown = [
+        {
+            "school_year": baseline_step["school_year"],
+            "grade": baseline_step["grade"],
+            "previous_school_year": "",
+            "previous_grade": "",
+            "previous_enrollment": "N/A",
+            "retained": "N/A",
+            "current_students": summary["total"],
+            "repeated": "N/A",
+            "retention_rate": "N/A",
+            "repetition_rate": "N/A",
+            "is_baseline": True,
+        }
+    ] + transition_breakdown
+
     return {
         "start_year": start_year,
         "end_year": end_year,
