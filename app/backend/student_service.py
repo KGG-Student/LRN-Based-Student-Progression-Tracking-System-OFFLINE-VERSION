@@ -260,10 +260,10 @@ def upsert_student(cursor, lrn, name, gender, school_year, grade_level, changed_
     return changes_logged
 
 
-def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status, remarks, changed_by=None):
+def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status, remarks, changed_by=None, completion_status=None):
     cursor.execute(
         """
-        SELECT id, grade_level, gender, status, remarks
+        SELECT id, grade_level, gender, status, remarks, completion_status
         FROM student_records
         WHERE lrn = %s
         AND school_year = %s
@@ -277,14 +277,14 @@ def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status,
     if existing is None:
         cursor.execute(
             """
-            INSERT INTO student_records (lrn, school_year, grade_level, gender, status, remarks)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO student_records (lrn, school_year, grade_level, gender, status, remarks, completion_status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (lrn, school_year, grade_level, gender, status, remarks),
+            (lrn, school_year, grade_level, gender, status, remarks, completion_status),
         )
         return "inserted", 0
 
-    record_id, old_grade, old_gender, old_status, old_remarks = existing
+    record_id, old_grade, old_gender, old_status, old_remarks, old_completion_status = existing
     if int(old_grade) != int(grade_level):
         raise ValueError(
             f"Duplicate school year rejected. {lrn} already has a Grade {old_grade} record in {school_year}."
@@ -298,13 +298,15 @@ def upsert_student_record(cursor, lrn, school_year, grade_level, gender, status,
         changes_logged += 1
     if log_change(cursor, lrn, "record.remarks", old_remarks, remarks, school_year, grade_level, changed_by):
         changes_logged += 1
+    if log_change(cursor, lrn, "record.grade10_completion", old_completion_status, completion_status, school_year, grade_level, changed_by):
+        changes_logged += 1
 
     cursor.execute(
         """
         UPDATE student_records
-        SET gender = %s, status = %s, remarks = %s
+        SET gender = %s, status = %s, remarks = %s, completion_status = %s
         WHERE id = %s
         """,
-        (gender, status, remarks, record_id),
+        (gender, status, remarks, completion_status, record_id),
     )
     return "updated", changes_logged

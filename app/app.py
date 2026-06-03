@@ -11,6 +11,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import check_password_hash, generate_password_hash
 from backend.constants import (
     EDITABLE_RECORD_STATUSES,
+    GRADE10_COMPLETION_STATUSES,
     LRN_PATTERN,
     MAX_UPLOAD_SIZE_MB,
     PER_PAGE,
@@ -59,6 +60,14 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+
+def normalize_grade10_completion_status(value, grade_level):
+    if int(grade_level) != 10:
+        return None
+
+    completion_status = str(value or "").strip().upper()
+    return completion_status if completion_status in {"PASS", "FAIL"} else "PASS"
 
 
 def get_password_reset_key_path():
@@ -833,6 +842,7 @@ def add_student():
         return redirect(url_for("students"))
 
     grade_level = int(grade_level)
+    completion_status = normalize_grade10_completion_status(request.form.get("completion_status"), grade_level)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -880,6 +890,7 @@ def add_student():
         status,
         remarks,
         changed_by,
+        completion_status,
     )
     changes_logged += record_changes
     log_change(cursor, lrn, "manual.student_record", "", f"Added Grade {grade_level} record for {school_year}", school_year, grade_level, changed_by)
@@ -923,6 +934,7 @@ def add_student_year_record(lrn):
         return redirect(url_for("student_history", lrn=lrn))
 
     grade_level = int(grade_level)
+    completion_status = normalize_grade10_completion_status(request.form.get("completion_status"), grade_level)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM students WHERE lrn = %s", (lrn,))
@@ -955,10 +967,10 @@ def add_student_year_record(lrn):
     changed_by = session.get("username")
     cursor.execute(
         """
-        INSERT INTO student_records (lrn, school_year, grade_level, gender, status, remarks)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO student_records (lrn, school_year, grade_level, gender, status, remarks, completion_status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
-        (lrn, school_year, grade_level, gender, status, remarks),
+        (lrn, school_year, grade_level, gender, status, remarks, completion_status),
     )
     log_change(cursor, lrn, "manual.student_record", "", f"Added Grade {grade_level} record for {school_year}", school_year, grade_level, changed_by)
     conn.commit()
@@ -1120,7 +1132,7 @@ def student_history(lrn):
 
     cursor.execute(
         """
-        SELECT school_year, grade_level, gender, status, remarks, updated_at
+        SELECT school_year, grade_level, gender, status, remarks, completion_status, updated_at
         FROM student_records
         WHERE lrn = %s
         ORDER BY school_year, grade_level
@@ -1136,9 +1148,10 @@ def student_history(lrn):
             "status_label": humanize_status(status),
             "remarks": format_remarks(status, remarks),
             "raw_remarks": normalize_remarks(remarks),
+            "completion_status": completion_status or "",
             "updated_at": updated_at,
         }
-        for school_year, grade_level, gender, status, remarks, updated_at in cursor.fetchall()
+        for school_year, grade_level, gender, status, remarks, completion_status, updated_at in cursor.fetchall()
     ]
 
     cursor.execute(
@@ -1161,7 +1174,8 @@ def student_history(lrn):
         history=history,
         changes=changes,
         grades=SUPPORTED_GRADES,
-        editable_statuses=EDITABLE_RECORD_STATUSES
+        editable_statuses=EDITABLE_RECORD_STATUSES,
+        completion_statuses=GRADE10_COMPLETION_STATUSES
     )
 
 
@@ -1192,11 +1206,12 @@ def update_student_record(lrn):
         return redirect(url_for("student_history", lrn=lrn))
 
     grade_level = int(grade_level)
+    completion_status = normalize_grade10_completion_status(request.form.get("completion_status"), grade_level)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT id, status, remarks
+        SELECT id, status, remarks, completion_status
         FROM student_records
         WHERE lrn = %s
         AND school_year = %s
@@ -1213,7 +1228,7 @@ def update_student_record(lrn):
         flash("No matching progression record was found.")
         return redirect(url_for("student_history", lrn=lrn))
 
-    record_id, old_status, old_remarks = existing
+    record_id, old_status, old_remarks, old_completion_status = existing
     changes_logged = 0
     changed_by = session.get("username")
 
@@ -1221,15 +1236,17 @@ def update_student_record(lrn):
         changes_logged += 1
     if log_change(cursor, lrn, "record.remarks", old_remarks, remarks, school_year, grade_level, changed_by=changed_by):
         changes_logged += 1
+    if log_change(cursor, lrn, "record.grade10_completion", old_completion_status, completion_status, school_year, grade_level, changed_by=changed_by):
+        changes_logged += 1
 
     if changes_logged:
         cursor.execute(
             """
             UPDATE student_records
-            SET status = %s, remarks = %s
+            SET status = %s, remarks = %s, completion_status = %s
             WHERE id = %s
             """,
-            (status, remarks, record_id),
+            (status, remarks, completion_status, record_id),
         )
         conn.commit()
         flash("Student record updated and logged.")

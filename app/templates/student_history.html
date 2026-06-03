@@ -327,6 +327,7 @@
               <th>Grade</th>
               <th>Gender</th>
               <th>Status</th>
+              <th>Grade 10 Outcome</th>
               <th>Remarks</th>
               <th>Updated At</th>
               {% if current_role == 'admin' %}<th>Action</th>{% endif %}
@@ -339,6 +340,7 @@
               <td>Grade {{ record.grade_level }}</td>
               <td>{{ record.gender }}</td>
               <td><span class="badge {{ status_badge_class(record.status) }}">{{ record.status_label }}</span></td>
+              <td>{% if record.grade_level == 10 %}{{ (record.completion_status or 'PASS')|title }}{% else %}-{% endif %}</td>
               <td>{{ record.remarks or '-' }}</td>
               <td>{{ record.updated_at }}</td>
               {% if current_role == 'admin' %}<td>
@@ -381,6 +383,15 @@
                     {% endfor %}
                   </select>
                 </div>
+                {% if record.grade_level == 10 %}
+                <div class="mb-3">
+                  <label class="form-label">Grade 10 Outcome</label>
+                  <select class="form-select" name="completion_status">
+                    <option value="PASS" {% if record.completion_status != 'FAIL' %}selected{% endif %}>Pass</option>
+                    <option value="FAIL" {% if record.completion_status == 'FAIL' %}selected{% endif %}>Fail</option>
+                  </select>
+                </div>
+                {% endif %}
                 <div class="mb-3">
                   <label class="form-label">Remarks</label>
                   <textarea class="form-control" name="remarks" rows="3">{{ record.raw_remarks }}</textarea>
@@ -415,7 +426,7 @@
               </div>
               <div class="mb-3">
                 <label class="form-label">Grade</label>
-                <select class="form-select" name="grade_level" required>
+                <select class="form-select" name="grade_level" id="addYearGradeLevel" required>
                   {% for grade in grades %}
                   <option value="{{ grade }}">Grade {{ grade }}</option>
                   {% endfor %}
@@ -435,6 +446,13 @@
                   {% for status in editable_statuses %}
                   <option value="{{ status }}">{{ status|replace('_', ' ')|title }}</option>
                   {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3" id="addYearCompletionStatusGroup">
+                <label class="form-label">Grade 10 Outcome</label>
+                <select class="form-select" name="completion_status">
+                  <option value="PASS" selected>Pass</option>
+                  <option value="FAIL">Fail</option>
                 </select>
               </div>
               <div class="mb-3">
@@ -565,6 +583,8 @@
   const confirmAddYearRecordSubmit = document.getElementById("confirmAddYearRecordSubmit");
   const addYearRecordModalElement = document.getElementById("addYearRecordModal");
   const confirmAddYearRecordModalElement = document.getElementById("confirmAddYearRecordModal");
+  const addYearGradeLevel = document.getElementById("addYearGradeLevel");
+  const addYearCompletionStatusGroup = document.getElementById("addYearCompletionStatusGroup");
   const deleteStudentForm = document.getElementById("deleteStudentForm");
   const openDeleteStudentConfirm = document.getElementById("openDeleteStudentConfirm");
   const confirmDeleteStudentSubmit = document.getElementById("confirmDeleteStudentSubmit");
@@ -572,6 +592,21 @@
 
   if (addYearRecordForm && openAddYearRecordConfirm && confirmAddYearRecordModalElement) {
     const confirmAddYearRecordModal = new bootstrap.Modal(confirmAddYearRecordModalElement);
+
+    const toggleAddYearCompletionStatus = function () {
+      if (!addYearGradeLevel || !addYearCompletionStatusGroup) {
+        return;
+      }
+
+      const isGrade10 = addYearGradeLevel.value === "10";
+      addYearCompletionStatusGroup.classList.toggle("d-none", !isGrade10);
+      if (!isGrade10) {
+        addYearCompletionStatusGroup.querySelector("select").value = "";
+      }
+    };
+
+    toggleAddYearCompletionStatus();
+    addYearGradeLevel?.addEventListener("change", toggleAddYearCompletionStatus);
 
     openAddYearRecordConfirm.addEventListener("click", function () {
       if (!addYearRecordForm.reportValidity()) {

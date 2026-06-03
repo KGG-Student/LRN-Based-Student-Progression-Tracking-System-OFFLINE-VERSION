@@ -183,6 +183,9 @@
               {% for cell in row.path %}
               <td>
                 <span class="badge {{ status_badge_class(cell.status) }}">{{ cell.status_label }}</span>
+                {% if cell.expected_grade == 10 and cell.completion_status %}
+                <div class="text-muted small">Outcome: {{ cell.completion_status|title }}</div>
+                {% endif %}
                 {% if cell.remarks %}<div class="text-muted small">Remarks: {{ cell.remarks }}</div>{% endif %}
               </td>
               {% endfor %}

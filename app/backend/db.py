@@ -143,6 +143,7 @@ def ensure_schema():
         "ALTER TABLE students ADD COLUMN gender VARCHAR(10)",
         "ALTER TABLE students ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
         "ALTER TABLE student_records ADD COLUMN remarks TEXT",
+        "ALTER TABLE student_records ADD COLUMN completion_status VARCHAR(10)",
         "ALTER TABLE student_records ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
         "ALTER TABLE student_records ADD INDEX idx_student_records_lrn (lrn)",
         "ALTER TABLE student_records DROP INDEX unique_student_year_grade",
@@ -171,6 +172,7 @@ def ensure_schema():
             gender VARCHAR(10),
             status VARCHAR(50),
             remarks TEXT,
+            completion_status VARCHAR(10),
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY unique_student_year (lrn, school_year),
             INDEX idx_student_records_lrn (lrn),
@@ -254,7 +256,7 @@ def ensure_schema():
                 OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFERRED IN%'
                 OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFER-IN%'
                 THEN 'TRANSFER_IN'
-            ELSE 'ENROLLED'
+            ELSE COALESCE(status, 'ENROLLED')
         END
         """
     )
@@ -298,6 +300,7 @@ def ensure_sqlite_schema(cursor):
             gender TEXT,
             status TEXT,
             remarks TEXT,
+            completion_status TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (lrn, school_year),
             FOREIGN KEY (lrn) REFERENCES students(lrn)
@@ -311,6 +314,12 @@ def ensure_sqlite_schema(cursor):
         ON student_records (lrn)
         """
     )
+
+    try:
+        cursor.execute("ALTER TABLE student_records ADD COLUMN completion_status TEXT")
+    except sqlite3.OperationalError as error:
+        if "duplicate column name" not in str(error).lower():
+            raise
 
     cursor.execute(
         """
@@ -380,7 +389,7 @@ def ensure_sqlite_schema(cursor):
                 OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFERRED IN%'
                 OR UPPER(COALESCE(remarks, '')) LIKE '%TRANSFER-IN%'
                 THEN 'TRANSFER_IN'
-            ELSE 'ENROLLED'
+            ELSE COALESCE(status, 'ENROLLED')
         END
         """
     )

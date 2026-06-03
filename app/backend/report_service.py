@@ -48,8 +48,8 @@ def build_grade7_cohort_report_workbook(report):
         ("Summary", "Value", "", "Indicator", "Value", "", "Meaning"),
         (f"Original Grade {report['start_grade']} Entry Cohort", report["summary"]["total"], "", "On-Time Completion Rate", f"{report['rates']['on_time_completion']}%", "", "Completed Grade 10 on the expected year"),
         ("On-Time Completed", report["summary"]["on_time"], "", "Overall Completion Rate", f"{report['rates']['overall_completion']}%", "", "Completed Grade 10 even with irregular records"),
-        ("Grade 10 Enrollment", report["summary"]["grade10_enrollment"], "", "Gross / Survival Rate", f"{report['rates']['survival']}%", "", "Grade 10 enrollment current SY / Grade 7 enrollment SY N-3"),
-        ("Grade 10 Completers", report["summary"]["grade10_completers"], "", "Completion Rate", f"{report['rates']['completion']}%", "", "Grade 10 completers current SY / Grade 7 enrollment SY N-3"),
+        ("Grade 10 Fail / Survival", report["summary"]["grade10_enrollment"], "", "Gross / Survival Rate", f"{report['rates']['survival']}%", "", "Grade 10 Fail count / Grade 7 enrollment SY N-3"),
+        ("Grade 10 Pass / Completers", report["summary"]["grade10_completers"], "", "Completion Rate", f"{report['rates']['completion']}%", "", "Grade 10 Pass count / Grade 7 enrollment SY N-3"),
         ("Transfer-Out", report["summary"]["transfer_out"], "", "Retention Rate", f"{report['rates']['retention']}%", "", "Same learners retained from one school year to the next"),
         ("Incomplete", report["summary"]["incomplete"], "", "Repetition Rate", f"{report['rates']['repetition']}%", "", "Current-year learners repeating the previous year's grade"),
         ("For Review", report["summary"]["for_review"], "", "", "", "", ""),
@@ -77,6 +77,8 @@ def build_grade7_cohort_report_workbook(report):
         sheet.cell(row=row_index, column=2, value=row_data["name"])
         for column, cell in enumerate(row_data["path"], start=3):
             value = cell["status_label"]
+            if cell.get("expected_grade") == 10 and cell.get("completion_status"):
+                value = f"{value} - Outcome: {cell['completion_status'].title()}"
             if cell["remarks"]:
                 value = f"{value} - {cell['remarks']}"
             sheet.cell(row=row_index, column=column, value=value)

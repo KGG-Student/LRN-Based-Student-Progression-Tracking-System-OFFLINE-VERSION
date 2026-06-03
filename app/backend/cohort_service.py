@@ -22,28 +22,76 @@ def is_transfer_in_status(status):
     return status in {"TRANSFER_IN", "PENDING_TRANSFER_IN"}
 
 
+def is_missing_status(status):
+    return status == "MISSING"
+
+
+def is_active_enrollment_status(status):
+    return status not in {"MISSING", "TRANSFER_OUT"}
+
+
+def get_completion_status(record):
+    if isinstance(record, dict):
+        if record.get("grade_level") == 10 or record.get("expected_grade") == 10:
+            return record.get("completion_status") or "PASS"
+
+        return record.get("completion_status") or ""
+
+    if len(record) > 4:
+        return record[4] or ("PASS" if len(record) > 1 and record[1] == 10 else "")
+
+    return ""
+
+
 def is_completer_record(record):
     # LIS/SF1 imports do not provide a separate graduation field yet.
-    # A Grade 10 record is treated as a completer until a completer status is added.
-    return record["grade_level"] == 10 and record["status"] != "TRANSFER_OUT"
+    # A Grade 10 record must now be marked PASS to count as a completer.
+    return (
+        record["grade_level"] == 10
+        and is_active_enrollment_status(record["status"])
+        and get_completion_status(record) == "PASS"
+    )
+
+
+def is_survival_record(record):
+    return (
+        record["grade_level"] == 10
+        and is_active_enrollment_status(record["status"])
+        and get_completion_status(record) == "FAIL"
+    )
 
 
 def summarize_cohort_status(path_cells, records=None):
     records = records or []
-    statuses = [cell["status"] for cell in path_cells if cell["status"] != "MISSING"]
-    all_statuses = statuses + [record[2] for record in records]
-    grades = [cell["actual_grade"] for cell in path_cells if cell["actual_grade"] is not None]
-    all_grades = [record[1] for record in records]
+    statuses = [cell["status"] for cell in path_cells if not is_missing_status(cell["status"])]
+    all_statuses = statuses + [record[2] for record in records if not is_missing_status(record[2])]
+    grades = [
+        cell["actual_grade"]
+        for cell in path_cells
+        if cell["actual_grade"] is not None and not is_missing_status(cell["status"])
+    ]
+    all_grades = [record[1] for record in records if is_active_enrollment_status(record[2])]
     has_missing = any(cell["status"] == "MISSING" for cell in path_cells)
-    has_grade_10 = 10 in all_grades or (
-        path_cells and path_cells[-1]["status"] != "MISSING" and path_cells[-1]["expected_grade"] == 10
+    has_grade_10_pass = any(record[1] == 10 and record[2] != "TRANSFER_OUT" and get_completion_status(record) == "PASS" for record in records)
+    has_grade_10_fail = any(record[1] == 10 and record[2] != "TRANSFER_OUT" and get_completion_status(record) == "FAIL" for record in records)
+    has_grade_10_pending = any(
+        record[1] == 10
+        and is_active_enrollment_status(record[2])
+        and get_completion_status(record) not in {"PASS", "FAIL"}
+        for record in records
     )
 
     if "TRANSFER_OUT" in all_statuses:
         return "TRANSFER_OUT"
 
-    if has_grade_10:
+    if has_grade_10_pass:
         return "DELAYED_COMPLETED" if has_missing else "COMPLETED"
+
+    if has_grade_10_fail:
+        return "SURVIVED"
+
+    if has_grade_10_pending:
+        return "GRADE10_PENDING"
 
     if "TRANSFER_IN" in all_statuses or "PENDING_TRANSFER_IN" in all_statuses:
         return "TRANSFER_IN"
@@ -80,6 +128,7 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
         "repeated": 0,
         "transfer_in": 0,
         "transfer_out": 0,
+        "survived": 0,
         "dropped": 0,
         "incomplete": 0,
         "for_review": 0,
@@ -89,7 +138,7 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
     for lrn, name in cohort_students:
         cursor.execute(
             """
-            SELECT school_year, grade_level, status, remarks
+            SELECT school_year, grade_level, status, remarks, completion_status
             FROM student_records
             WHERE lrn = %s
             AND grade_level BETWEEN %s AND 10
@@ -103,8 +152,9 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
                 "status": status,
                 "remarks": remarks,
                 "grade": grade_level,
+                "completion_status": completion_status or ("PASS" if grade_level == 10 else ""),
             }
-            for school_year, grade_level, status, remarks in records
+            for school_year, grade_level, status, remarks, completion_status in records
         }
 
         path_cells = []
@@ -112,7 +162,7 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
         for step in expected_path:
             record = records_by_year_grade.get((step["school_year"], step["grade"]))
 
-            if record:
+            if record and not is_missing_status(record["status"]):
                 path_cells.append(
                     {
                         "school_year": step["school_year"],
@@ -120,6 +170,7 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
                         "actual_grade": record["grade"],
                         "status": record["status"],
                         "status_label": humanize_status(record["status"]),
+                        "completion_status": get_completion_status(record),
                         "remarks": format_remarks(record["status"], record["remarks"]),
                     }
                 )
@@ -131,6 +182,7 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
                         "actual_grade": None,
                         "status": "MISSING",
                         "status_label": humanize_status("MISSING"),
+                        "completion_status": "",
                         "remarks": "",
                     }
                 )
@@ -151,6 +203,8 @@ def build_cohort_tracking(cursor, start_year, start_grade, expected_path):
             summary["transfer_in"] += 1
         elif result == "TRANSFER_OUT":
             summary["transfer_out"] += 1
+        elif result == "SURVIVED":
+            summary["survived"] += 1
         else:
             summary["incomplete"] += 1
 
@@ -228,6 +282,7 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         "grade10_enrollment": 0,
         "grade10_completers": 0,
         "survival": 0,
+        "survived": 0,
         "delayed": 0,
         "repeated": 0,
         "transfer_out": 0,
@@ -250,7 +305,7 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
     for lrn, name in cohort_students:
         cursor.execute(
             """
-            SELECT school_year, grade_level, status, remarks
+            SELECT school_year, grade_level, status, remarks, completion_status
             FROM student_records
             WHERE lrn = %s
             AND grade_level BETWEEN %s AND 10
@@ -264,8 +319,9 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
                 "grade_level": grade_level,
                 "status": status,
                 "remarks": remarks,
+                "completion_status": completion_status or ("PASS" if grade_level == 10 else ""),
             }
-            for school_year, grade_level, status, remarks in cursor.fetchall()
+            for school_year, grade_level, status, remarks, completion_status in cursor.fetchall()
         ]
         records_by_year_grade = {
             (record["school_year"], record["grade_level"]): record
@@ -282,13 +338,14 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         missing_steps = []
         for step in expected_path:
             record = records_by_year_grade.get((step["school_year"], step["grade"]))
-            if record:
+            if record and not is_missing_status(record["status"]):
                 path_cells.append(
                     {
                         "school_year": step["school_year"],
                         "expected_grade": step["grade"],
                         "status": record["status"],
                         "status_label": humanize_status(record["status"]),
+                        "completion_status": get_completion_status(record),
                         "remarks": format_remarks(record["status"], record["remarks"]),
                     }
                 )
@@ -300,19 +357,41 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
                         "expected_grade": step["grade"],
                         "status": "MISSING",
                         "status_label": humanize_status("MISSING"),
+                        "completion_status": "",
                         "remarks": "",
                     }
                 )
 
-        has_grade10 = any(record["grade_level"] == 10 for record in records)
-        has_expected_grade10 = (end_year, 10) in records_by_year_grade
+        has_grade10 = any(
+            record["grade_level"] == 10 and is_active_enrollment_status(record["status"])
+            for record in records
+        )
+        expected_grade10_record = records_by_year_grade.get((end_year, 10))
+        has_expected_grade10 = bool(
+            expected_grade10_record and is_completer_record(expected_grade10_record)
+        )
         has_transfer_out = any(record["status"] == "TRANSFER_OUT" for record in records)
         has_pending_transfer = any(record["status"] == "PENDING_TRANSFER_IN" for record in records)
-        has_repetition = any(len(years) > 1 for years in grade_years.values())
-        expected_grade10_record = records_by_year_grade.get((end_year, 10))
+        has_repetition = any(
+            len(
+                {
+                    record["school_year"]
+                    for record in records
+                    if record["grade_level"] == grade and not is_missing_status(record["status"])
+                }
+            )
+            > 1
+            for grade in grade_years
+        )
         has_grade10_completer = bool(expected_grade10_record and is_completer_record(expected_grade10_record))
+        has_grade10_survivor = bool(expected_grade10_record and is_survival_record(expected_grade10_record))
+        has_grade10_pending = bool(
+            expected_grade10_record
+            and is_active_enrollment_status(expected_grade10_record["status"])
+            and get_completion_status(expected_grade10_record) not in {"PASS", "FAIL"}
+        )
         on_time = has_expected_grade10 and not missing_steps and not has_transfer_out
-        delayed = has_grade10 and not on_time
+        delayed = any(is_completer_record(record) for record in records) and not on_time
 
         if has_transfer_out:
             result = "TRANSFER_OUT"
@@ -323,6 +402,12 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         elif delayed:
             result = "DELAYED_COMPLETED"
             reason = "Reached Grade 10 later than the expected path"
+        elif has_grade10_survivor:
+            result = "SURVIVED"
+            reason = "Reached Grade 10 but marked Fail"
+        elif has_grade10_pending:
+            result = "GRADE10_PENDING"
+            reason = "Grade 10 outcome needs Pass or Fail"
         elif has_repetition:
             result = "REPEATED"
             reason = "Repeated or delayed in one grade level"
@@ -335,10 +420,11 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
 
         if on_time:
             summary["on_time"] += 1
-        if has_grade10:
+        if any(is_completer_record(record) for record in records):
             summary["completed"] += 1
-        if expected_grade10_record and expected_grade10_record["status"] != "TRANSFER_OUT":
+        if has_grade10_survivor:
             summary["grade10_enrollment"] += 1
+            summary["survived"] += 1
         if has_grade10_completer:
             summary["grade10_completers"] += 1
         if delayed or has_repetition:
@@ -349,7 +435,7 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
             summary["transfer_out"] += 1
         if result == "INCOMPLETE":
             summary["incomplete"] += 1
-        if result in {"TRANSFER_OUT", "REPEATED", "INCOMPLETE", "DELAYED_COMPLETED"} or has_pending_transfer:
+        if result in {"TRANSFER_OUT", "REPEATED", "INCOMPLETE", "DELAYED_COMPLETED", "SURVIVED", "GRADE10_PENDING"} or has_pending_transfer:
             summary["for_review"] += 1
 
         if has_transfer_out:
@@ -382,16 +468,28 @@ def build_grade7_cohort_report(cursor, start_year, start_grade=7):
         for index, current_step in enumerate(expected_path[1:]):
             previous_step = expected_path[index]
             transition = transition_breakdown[index]
-            previous_records = records_by_year.get(previous_step["school_year"], [])
-            current_records = records_by_year.get(current_step["school_year"], [])
+            previous_records = [
+                record
+                for record in records_by_year.get(previous_step["school_year"], [])
+                if not is_missing_status(record["status"])
+            ]
+            current_records = [
+                record
+                for record in records_by_year.get(current_step["school_year"], [])
+                if not is_missing_status(record["status"])
+            ]
             previous_record = records_by_year_grade.get((previous_step["school_year"], previous_step["grade"]))
             current_expected_record = records_by_year_grade.get((current_step["school_year"], current_step["grade"]))
 
-            if previous_record and previous_record["status"] != "TRANSFER_OUT":
+            if previous_record and is_active_enrollment_status(previous_record["status"]):
                 transition["previous_enrollment"] += 1
                 transition_totals["previous_enrollment"] += 1
 
-                if current_expected_record and not is_transfer_in_status(current_expected_record["status"]):
+                if (
+                    current_expected_record
+                    and is_active_enrollment_status(current_expected_record["status"])
+                    and not is_transfer_in_status(current_expected_record["status"])
+                ):
                     transition["retained"] += 1
                     transition_totals["retained"] += 1
 

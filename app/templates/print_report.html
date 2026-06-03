@@ -207,8 +207,8 @@
       <div class="summary-grid">
         <div><span>Original Grade {{ report.start_grade }} Entry Cohort</span><strong>{{ report.summary.total }}</strong></div>
         <div><span>On-Time Completed</span><strong>{{ report.summary.on_time }}</strong></div>
-        <div><span>Grade 10 Enrollment</span><strong>{{ report.summary.grade10_enrollment }}</strong></div>
-        <div><span>Grade 10 Completers</span><strong>{{ report.summary.grade10_completers }}</strong></div>
+        <div><span>Grade 10 Fail / Survival</span><strong>{{ report.summary.grade10_enrollment }}</strong></div>
+        <div><span>Grade 10 Pass / Completers</span><strong>{{ report.summary.grade10_completers }}</strong></div>
         <div><span>For Review</span><strong>{{ report.summary.for_review }}</strong></div>
       </div>
     </section>
@@ -221,7 +221,7 @@
         <div><span>Retention Rate</span><strong>{{ report.rates.retention }}%</strong></div>
         <div><span>Repetition Rate</span><strong>{{ report.rates.repetition }}%</strong></div>
       </div>
-      <p class="muted">Gross / Survival Rate = Grade 10 enrollment in the current school year divided by Grade 7 enrollment from SY N-3. Completion Rate = Grade 10 completers in the current school year divided by Grade 7 enrollment from SY N-3. Because no separate graduation field exists yet, a valid Grade 10 record is treated as a completer.</p>
+      <p class="muted">Gross / Survival Rate = Grade 10 Fail count divided by Grade 7 enrollment from SY N-3. Completion Rate = Grade 10 Pass count divided by Grade 7 enrollment from SY N-3.</p>
     </section>
 
     <section>
@@ -305,7 +305,11 @@
             <td>{{ row.lrn }}</td>
             <td>{{ row.name }}</td>
             {% for cell in row.path %}
-            <td>{{ cell.status_label }}{% if cell.remarks %}<br><span class="muted">Remarks: {{ cell.remarks }}</span>{% endif %}</td>
+            <td>
+              {{ cell.status_label }}
+              {% if cell.expected_grade == 10 and cell.completion_status %}<br><span class="muted">Outcome: {{ cell.completion_status|title }}</span>{% endif %}
+              {% if cell.remarks %}<br><span class="muted">Remarks: {{ cell.remarks }}</span>{% endif %}
+            </td>
             {% endfor %}
             <td>{{ row.result_label }}</td>
           </tr>

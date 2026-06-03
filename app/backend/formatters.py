@@ -8,6 +8,8 @@ def status_badge_class(status):
         "REPEATED": "bg-warning text-dark",
         "COMPLETED": "bg-primary",
         "DELAYED_COMPLETED": "bg-info text-dark",
+        "SURVIVED": "bg-info text-dark",
+        "GRADE10_PENDING": "bg-warning text-dark",
         "STRAIGHT_PATH": "bg-success",
         "INCOMPLETE": "bg-secondary",
     }
@@ -24,6 +26,8 @@ def humanize_status(status):
         "REPEATED": "Repeater",
         "COMPLETED": "Completed",
         "DELAYED_COMPLETED": "Completed - Irregular",
+        "SURVIVED": "Survived - Failed",
+        "GRADE10_PENDING": "Grade 10 Outcome Pending",
         "STRAIGHT_PATH": "Regular",
         "INCOMPLETE": "Incomplete",
     }
@@ -103,7 +107,7 @@ def format_remarks(status, remarks):
     if clean_remarks.upper() in abbreviated_remarks:
         return abbreviated_remarks[clean_remarks.upper()]
 
-    if status in {"TRANSFER_IN", "PENDING_TRANSFER_IN", "TRANSFER_OUT"} and not clean_remarks:
+    if status in {"MISSING", "TRANSFER_IN", "PENDING_TRANSFER_IN", "TRANSFER_OUT"} and not clean_remarks:
         return status_label
 
     return clean_remarks
