@@ -77,6 +77,12 @@ def main():
         server_thread.join()
         return
 
+    if os.environ.get("LRN_USE_EMBEDDED_WINDOW") != "1":
+        write_log(f"Opening browser at {url}")
+        webbrowser.open(url)
+        server_thread.join()
+        return
+
     try:
         import webview
 
